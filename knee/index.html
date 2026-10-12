@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Knee Progress</title>
+<meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Knee">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --card: #ffffff;
+    --text: #1d1e21;
+    --muted: #6b6f76;
+    --line: #e4e2dc;
+    --accent: #2f6fdf;
+    --better: #1f9d6b;
+    --better-bg: #e3f5ec;
+    --worse: #d4493f;
+    --worse-bg: #fbe7e5;
+    --same: #6b6f76;
+    --same-bg: #ecebe7;
+    --goal: #c98a0b;
+    --radius: 16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16171a;
+      --card: #212226;
+      --text: #ececee;
+      --muted: #9a9ca3;
+      --line: #33353a;
+      --accent: #6a9cf5;
+      --better: #3fc98f;
+      --better-bg: #1d3a2e;
+      --worse: #f0716a;
+      --worse-bg: #432423;
+      --same: #a5a7ad;
+      --same-bg: #2c2d31;
+      --goal: #f0b440;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: env(safe-area-inset-top) 0 calc(76px + env(safe-area-inset-bottom));
+    min-height: 100vh;
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 12px 16px 24px; }
+  h1 { font-size: 26px; margin: 8px 0 14px; letter-spacing: -0.02em; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+  .card { background: var(--card); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; border: 1px solid var(--line); }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  input, textarea {
+    font: inherit; color: var(--text); background: var(--bg); width: 100%;
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+  }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  textarea { min-height: 120px; resize: vertical; }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+
+  .back { display: inline-flex; align-items: center; gap: 2px; color: var(--accent); text-decoration: none; font-size: 17px; padding: 6px 6px 6px 0; }
+  .back span { font-size: 26px; line-height: 1; margin-top: -3px; }
+
+  /* Date nav */
+  .datenav { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; }
+  .datenav button { width: 44px; height: 44px; border-radius: 50%; font-size: 22px; background: var(--card); border: 1px solid var(--line); }
+  .datenav button:disabled { opacity: .3; }
+  .datenav .label { text-align: center; }
+  .datenav .label strong { display: block; font-size: 20px; }
+
+  /* Pain picker */
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .seg button { padding: 14px 6px; border-radius: 12px; background: var(--bg); border: 2px solid transparent; font-weight: 600; }
+  .seg button .big { display: block; font-size: 22px; line-height: 1.1; }
+  .seg button[data-v="better"].on { background: var(--better-bg); border-color: var(--better); color: var(--better); }
+  .seg button[data-v="same"].on { background: var(--same-bg); border-color: var(--same); }
+  .seg button[data-v="worse"].on { background: var(--worse-bg); border-color: var(--worse); color: var(--worse); }
+  .stepper { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 14px; }
+  .stepper button { width: 44px; height: 44px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); font-size: 22px; }
+  .stepper .val { font-size: 28px; font-weight: 700; min-width: 70px; text-align: center; }
+  .total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .total b { font-size: 20px; }
+
+  /* Goals */
+  .goal-btn { width: 100%; padding: 14px; border-radius: 12px; border: 2px dashed var(--goal); color: var(--goal); font-weight: 600; margin-top: 4px; }
+  .chip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--bg); margin-bottom: 8px; }
+  .chip .t { flex: 1; }
+  .chip .x { color: var(--muted); font-size: 20px; padding: 0 4px; }
+  .goal-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .goal-row:last-child { border-bottom: 0; }
+  .goal-row .t { flex: 1; }
+  .goal-row .t small { display: block; color: var(--muted); font-size: 13px; }
+  .goal-row.done .t > span { text-decoration: line-through; text-decoration-color: var(--muted); }
+  .icon-btn { color: var(--muted); padding: 6px 8px; font-size: 14px; border-radius: 8px; }
+  .add-row { display: flex; gap: 8px; }
+  .add-row button { padding: 0 18px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 600; }
+  .star { color: var(--goal); }
+
+  /* Steps */
+  .steps-row { display: flex; gap: 10px; align-items: center; }
+  .steps-row input { font-size: 22px; font-weight: 600; }
+
+  /* Saved toast */
+  .saved { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(88px + env(safe-area-inset-bottom)); background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .saved.show { opacity: .92; }
+
+  /* Tabs */
+  nav.tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: center;
+    background: var(--card); border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav.tabs .inner { display: flex; width: 100%; max-width: 560px; }
+  nav.tabs button { flex: 1; padding: 10px 0 12px; color: var(--muted); font-size: 12px; font-weight: 600; }
+  nav.tabs button svg { display: block; margin: 0 auto 3px; width: 24px; height: 24px; }
+  nav.tabs button.on { color: var(--accent); }
+
+  /* Sheet */
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 10; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; background: var(--card);
+    border-radius: 20px 20px 0 0; padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+    max-height: 75vh; overflow-y: auto; max-width: 560px; margin: 0 auto;
+  }
+  .sheet h3 { margin: 4px 0 4px; }
+  .sheet .pick { display: block; width: 100%; text-align: left; padding: 14px; border-radius: 12px; background: var(--bg); margin-top: 8px; }
+
+  /* Charts */
+  .range { display: flex; gap: 6px; margin-bottom: 10px; }
+  .range button { padding: 6px 12px; border-radius: 20px; background: var(--card); border: 1px solid var(--line); font-size: 14px; }
+  .range button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+  svg.chart text { fill: var(--muted); font-size: 10px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+  .stat b { display: block; font-size: 22px; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .log-item { display: block; width: 100%; text-align: left; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .log-item:last-child { border-bottom: 0; }
+  .log-top { display: flex; justify-content: space-between; gap: 8px; }
+  .badge { font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .badge.better { background: var(--better-bg); color: var(--better); }
+  .badge.worse { background: var(--worse-bg); color: var(--worse); }
+  .badge.same { background: var(--same-bg); color: var(--same); }
+  .log-note { color: var(--muted); font-size: 14px; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .btn-secondary { padding: 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); width: 100%; font-weight: 600; }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .empty { text-align: center; padding: 24px 8px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<main>
+  <!-- TODAY -->
+  <section id="view-today">
+    <a class="back" href="../"><span>‹</span>Workouts</a>
+    <div class="datenav">
+      <button id="prevDay" aria-label="Previous day">‹</button>
+      <div class="label"><strong id="dayTitle"></strong><span class="muted small" id="daySub"></span></div>
+      <button id="nextDay" aria-label="Next day">›</button>
+    </div>
+
+    <div class="card">
+      <h2>Knee pain compared to yesterday</h2>
+      <div class="seg" id="painSeg">
+        <button data-v="better"><span class="big">↓</span>Better</button>
+        <button data-v="same"><span class="big">=</span>Same</button>
+        <button data-v="worse"><span class="big">↑</span>Worse</button>
+      </div>
+      <div class="stepper hidden" id="stepper">
+        <button id="amtMinus" aria-label="Less">−</button>
+        <div class="val" id="amtVal"></div>
+        <button id="amtPlus" aria-label="More">+</button>
+      </div>
+      <div class="total">
+        <span class="muted small">Running total (lower = less pain)</span>
+        <b id="runTotal">0</b>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Goals realised this day</h2>
+      <div id="dayGoals"></div>
+      <button class="goal-btn" id="realiseBtn">★ Realise a goal</button>
+    </div>
+
+    <div class="card">
+      <h2>Steps</h2>
+      <div class="steps-row">
+        <input id="steps" type="number" inputmode="numeric" pattern="[0-9]*" min="0" placeholder="0">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>How does it feel?</h2>
+      <textarea id="note" placeholder="Stiff in the morning, better after walking…"></textarea>
+    </div>
+  </section>
+
+  <!-- PROGRESS -->
+  <section id="view-progress" class="hidden">
+    <h1>Progress</h1>
+    <div class="range" id="range">
+      <button data-r="14">2 weeks</button>
+      <button data-r="30">Month</button>
+      <button data-r="90">3 months</button>
+      <button data-r="0">All</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="card">
+      <h2>Pain — running total</h2>
+      <div id="painChart"></div>
+      <div class="legend">
+        <span>↓ lower = less pain</span>
+        <span><span class="star">★</span> goal realised</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Steps</h2>
+      <div id="stepsChart"></div>
+    </div>
+    <div class="card">
+      <h2>Log</h2>
+      <div id="log"></div>
+    </div>
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="muted small" style="margin-top:0">Your data is stored only on this phone. Export a backup now and then.</p>
+      <div class="btn-row">
+        <button class="btn-secondary" id="exportBtn">Export</button>
+        <button class="btn-secondary" id="importBtn">Import</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" class="hidden">
+    </div>
+  </section>
+
+  <!-- GOALS -->
+  <section id="view-goals" class="hidden">
+    <h1>Goals</h1>
+    <div class="card">
+      <div class="add-row">
+        <input id="goalInput" placeholder="e.g. Sleep without pain" enterkeyhint="done">
+        <button id="addGoal">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>To achieve</h2>
+      <div id="openGoals"></div>
+    </div>
+    <div class="card">
+      <h2>Achieved <span class="star">★</span></h2>
+      <div id="doneGoals"></div>
+    </div>
+  </section>
+</main>
+
+<div class="saved" id="saved">Saved</div>
+
+<div id="sheetWrap" class="hidden">
+  <div class="backdrop" id="backdrop"></div>
+  <div class="sheet">
+    <h3>Realise a goal</h3>
+    <div class="muted small" id="sheetSub"></div>
+    <div id="sheetList"></div>
+    <div class="add-row" style="margin-top:14px">
+      <input id="sheetNewGoal" placeholder="Or type a new one…" enterkeyhint="done">
+      <button id="sheetAdd">Add</button>
+    </div>
+  </div>
+</div>
+
+<nav class="tabs">
+  <div class="inner">
+    <button data-tab="today" class="on">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+      Today
+    </button>
+    <button data-tab="progress">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 9l4 4 3-3 5 6"/></svg>
+      Progress
+    </button>
+    <button data-tab="goals">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+      Goals
+    </button>
+  </div>
+</nav>
+
+<script>
+// ---------- Storage ----------
+const KEY = 'kneeTracker.v1';
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (d && d.entries && d.goals) return d;
+  } catch (e) {}
+  return { entries: {}, goals: [] };
+}
+let db = load();
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {}
+  flashSaved();
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ---------- Dates ----------
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return iso(d); };
+const todayIso = () => iso(new Date());
+const fmtLong = s => parse(s).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+const fmtShort = s => parse(s).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 86400000);
+
+let current = todayIso();
+
+// ---------- Helpers ----------
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+function entry(date) { return db.entries[date] || {}; }
+function setEntry(date, patch) {
+  const e = Object.assign({}, db.entries[date], patch);
+  for (const k of Object.keys(e)) if (e[k] === null || e[k] === '' || e[k] === undefined) delete e[k];
+  if (Object.keys(e).length) db.entries[date] = e; else delete db.entries[date];
+  save();
+}
+function runningTotal(upTo) {
+  let t = 0;
+  for (const [d, e] of Object.entries(db.entries)) if (d <= upTo && typeof e.change === 'number') t += e.change;
+  return t;
+}
+const signed = n => n > 0 ? `+${n}` : `${n}`;
+
+let savedTimer;
+function flashSaved() {
+  const el = $('saved');
+  el.classList.add('show');
+  clearTimeout(savedTimer);
+  savedTimer = setTimeout(() => el.classList.remove('show'), 900);
+}
+
+// ---------- Today view ----------
+function renderToday() {
+  const t = todayIso();
+  const diff = daysBetween(current, t);
+  $('dayTitle').textContent = diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : fmtShort(current);
+  $('daySub').textContent = fmtLong(current);
+  $('nextDay').disabled = current >= t;
+
+  const e = entry(current);
+  const c = e.change;
+  const mode = c === undefined ? null : c < 0 ? 'better' : c > 0 ? 'worse' : 'same';
+  document.querySelectorAll('#painSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === mode));
+  $('stepper').classList.toggle('hidden', !(mode === 'better' || mode === 'worse'));
+  if (mode === 'better' || mode === 'worse') {
+    $('amtVal').textContent = signed(c);
+    $('amtVal').style.color = mode === 'better' ? 'var(--better)' : 'var(--worse)';
+  }
+  $('runTotal').textContent = signed(runningTotal(current)).replace('+0', '0');
+
+  if (document.activeElement !== $('steps')) $('steps').value = e.steps ?? '';
+  if (document.activeElement !== $('note')) $('note').value = e.note ?? '';
+
+  const achieved = db.goals.filter(g => g.achieved === current);
+  $('dayGoals').innerHTML = achieved.map(g =>
+    `<div class="chip"><span class="star">★</span><span class="t">${esc(g.text)}</span><button class="x" data-unrealise="${g.id}" aria-label="Undo">×</button></div>`
+  ).join('');
+}
+
+document.querySelectorAll('#painSeg button').forEach(b => b.addEventListener('click', () => {
+  const v = b.dataset.v;
+  const c = entry(current).change;
+  const mag = typeof c === 'number' && c !== 0 ? Math.abs(c) : 1;
+  const curMode = c === undefined ? null : c < 0 ? 'better' : c > 0 ? 'worse' : 'same';
+  if (curMode === v) setEntry(current, { change: null }); // tap again to clear
+  else setEntry(current, { change: v === 'same' ? 0 : v === 'better' ? -mag : mag });
+  renderToday();
+}));
+function bump(delta) {
+  const c = entry(current).change;
+  if (!c) return;
+  const sign = Math.sign(c);
+  const mag = Math.min(10, Math.max(1, Math.abs(c) + delta));
+  setEntry(current, { change: sign * mag });
+  renderToday();
+}
+$('amtPlus').onclick = () => bump(1);
+$('amtMinus').onclick = () => bump(-1);
+
+$('steps').addEventListener('input', e => {
+  const v = e.target.value.trim();
+  const n = parseInt(v, 10);
+  setEntry(current, { steps: v === '' || isNaN(n) ? null : Math.max(0, n) });
+});
+let noteTimer;
+$('note').addEventListener('input', e => {
+  clearTimeout(noteTimer);
+  const val = e.target.value;
+  const date = current;
+  noteTimer = setTimeout(() => setEntry(date, { note: val.trim() ? val : null }), 400);
+});
+$('note').addEventListener('blur', e => {
+  clearTimeout(noteTimer);
+  setEntry(current, { note: e.target.value.trim() ? e.target.value : null });
+});
+
+function goTo(date) {
+  $('note').blur(); $('steps').blur();
+  current = date;
+  renderToday();
+}
+$('prevDay').onclick = () => goTo(addDays(current, -1));
+$('nextDay').onclick = () => { if (current < todayIso()) goTo(addDays(current, 1)); };
+
+$('dayGoals').addEventListener('click', e => {
+  const id = e.target.dataset.unrealise;
+  if (!id) return;
+  const g = db.goals.find(g => g.id === id);
+  if (g) { g.achieved = null; save(); renderToday(); }
+});
+
+// ---------- Realise-a-goal sheet ----------
+function openSheet() {
+  const open = db.goals.filter(g => !g.achieved);
+  $('sheetSub').textContent = `Mark as achieved on ${fmtLong(current)}`;
+  $('sheetList').innerHTML = open.length
+    ? open.map(g => `<button class="pick" data-realise="${g.id}">${esc(g.text)}</button>`).join('')
+    : `<div class="empty">No open goals yet — add one below.</div>`;
+  $('sheetWrap').classList.remove('hidden');
+}
+function closeSheet() { $('sheetWrap').classList.add('hidden'); $('sheetNewGoal').value = ''; }
+$('realiseBtn').onclick = openSheet;
+$('backdrop').onclick = closeSheet;
+$('sheetList').addEventListener('click', e => {
+  const btn = e.target.closest('[data-realise]');
+  if (!btn) return;
+  const g = db.goals.find(g => g.id === btn.dataset.realise);
+  if (g) { g.achieved = current; save(); }
+  closeSheet(); renderToday();
+});
+function sheetAdd() {
+  const text = $('sheetNewGoal').value.trim();
+  if (!text) return;
+  db.goals.push({ id: uid(), text, created: current, achieved: current });
+  save(); closeSheet(); renderToday();
+}
+$('sheetAdd').onclick = sheetAdd;
+$('sheetNewGoal').addEventListener('keydown', e => { if (e.key === 'Enter') sheetAdd(); });
+
+// ---------- Goals view ----------
+function renderGoals() {
+  const open = db.goals.filter(g => !g.achieved);
+  const done = db.goals.filter(g => g.achieved).sort((a, b) => b.achieved.localeCompare(a.achieved));
+  $('openGoals').innerHTML = open.length ? open.map(g => `
+    <div class="goal-row">
+      <div class="t"><span>${esc(g.text)}</span><small>Added ${fmtShort(g.created)}</small></div>
+      <button class="icon-btn" data-del="${g.id}">Delete</button>
+    </div>`).join('') : `<div class="empty">Nothing here yet. Add a goal above.</div>`;
+  $('doneGoals').innerHTML = done.length ? done.map(g => {
+    const days = g.created ? daysBetween(g.created, g.achieved) : null;
+    return `
+    <div class="goal-row done">
+      <span class="star">★</span>
+      <div class="t"><span>${esc(g.text)}</span><small>Achieved ${fmtLong(g.achieved)}${days > 0 ? ` · ${days} day${days === 1 ? '' : 's'} after adding` : ''}</small></div>
+      <button class="icon-btn" data-undo="${g.id}">Undo</button>
+    </div>`;
+  }).join('') : `<div class="empty">Realise goals from the Today screen.</div>`;
+}
+function addGoal() {
+  const text = $('goalInput').value.trim();
+  if (!text) return;
+  db.goals.push({ id: uid(), text, created: todayIso(), achieved: null });
+  $('goalInput').value = '';
+  save(); renderGoals();
+}
+$('addGoal').onclick = addGoal;
+$('goalInput').addEventListener('keydown', e => { if (e.key === 'Enter') addGoal(); });
+$('view-goals').addEventListener('click', e => {
+  const del = e.target.dataset.del, undo = e.target.dataset.undo;
+  if (del) {
+    const g = db.goals.find(g => g.id === del);
+    if (g && confirm(`Delete "${g.text}"?`)) { db.goals = db.goals.filter(x => x.id !== del); save(); renderGoals(); }
+  } else if (undo) {
+    const g = db.goals.find(g => g.id === undo);
+    if (g) { g.achieved = null; save(); renderGoals(); }
+  }
+});
+
+// ---------- Progress view ----------
+let range = 30;
+try { range = Number(localStorage.getItem(KEY + '.range') ?? 30); } catch (e) {}
+
+function renderProgress() {
+  document.querySelectorAll('#range button').forEach(b => b.classList.toggle('on', Number(b.dataset.r) === range));
+  const dates = Object.keys(db.entries).sort();
+  const t = todayIso();
+  const first = dates[0] || t;
+  let start = range ? addDays(t, -(range - 1)) : first;
+  if (!range && daysBetween(start, t) < 6) start = addDays(t, -6);
+  const n = daysBetween(start, t) + 1;
+  const days = Array.from({ length: n }, (_, i) => addDays(start, i));
+
+  // running totals per day (carry forward)
+  let tot = runningTotal(addDays(start, -1));
+  const pain = days.map(d => {
+    const e = db.entries[d];
+    if (e && typeof e.change === 'number') tot += e.change;
+    return { d, y: tot, logged: !!(e && typeof e.change === 'number') };
+  });
+  const steps = days.map(d => ({ d, y: db.entries[d]?.steps ?? null }));
+  const goalDays = db.goals.filter(g => g.achieved && g.achieved >= start && g.achieved <= t);
+
+  // stats
+  const inRange = days.filter(d => db.entries[d]);
+  const stepVals = steps.filter(s => s.y != null).map(s => s.y);
+  const avgSteps = stepVals.length ? Math.round(stepVals.reduce((a, b) => a + b, 0) / stepVals.length) : null;
+  const periodChange = pain.length ? pain[pain.length - 1].y - runningTotal(addDays(start, -1)) : 0;
+  $('stats').innerHTML = `
+    <div class="stat"><b style="color:${periodChange < 0 ? 'var(--better)' : periodChange > 0 ? 'var(--worse)' : 'inherit'}">${signed(periodChange).replace('+0', '0')}</b><span>Pain change</span></div>
+    <div class="stat"><b>${avgSteps != null ? avgSteps.toLocaleString() : '–'}</b><span>Avg steps</span></div>
+    <div class="stat"><b>${goalDays.length}</b><span>Goals realised</span></div>`;
+
+  $('painChart').innerHTML = inRange.length ? painChart(pain, goalDays) : `<div class="empty">Log a few days to see your graph.</div>`;
+  $('stepsChart').innerHTML = stepVals.length ? stepsChart(steps) : `<div class="empty">No steps logged in this period.</div>`;
+
+  // log list (newest first, all time)
+  const goalsByDay = {};
+  db.goals.forEach(g => { if (g.achieved) (goalsByDay[g.achieved] ||= []).push(g.text); });
+  const logDates = [...new Set([...dates, ...Object.keys(goalsByDay)])].sort().reverse().slice(0, 60);
+  $('log').innerHTML = logDates.length ? logDates.map(d => {
+    const e = db.entries[d] || {};
+    const c = e.change;
+    const badge = typeof c === 'number'
+      ? `<span class="badge ${c < 0 ? 'better' : c > 0 ? 'worse' : 'same'}">${c === 0 ? 'Same' : signed(c)}</span>` : '';
+    return `<button class="log-item" data-go="${d}">
+      <div class="log-top"><strong>${fmtLong(d)}</strong>${badge}</div>
+      <div class="muted small">${e.steps != null ? `${e.steps.toLocaleString()} steps` : ''}${(goalsByDay[d] || []).map(t => ` <span class="star">★</span> ${esc(t)}`).join('')}</div>
+      ${e.note ? `<div class="log-note">${esc(e.note)}</div>` : ''}
+    </button>`;
+  }).join('') : `<div class="empty">No entries yet.</div>`;
+}
+
+const W = 340, PL = 30, PR = 8;
+function xScale(i, n) { return PL + (n === 1 ? (W - PL - PR) / 2 : i * (W - PL - PR) / (n - 1)); }
+function xLabels(days, H) {
+  const n = days.length, idx = [0, Math.floor((n - 1) / 2), n - 1];
+  return [...new Set(idx)].map((i, k) =>
+    `<text x="${xScale(i, n)}" y="${H - 2}" text-anchor="${k === 0 ? 'start' : k === idx.length - 1 ? 'end' : 'middle'}">${fmtShort(days[i])}</text>`).join('');
+}
+function niceTicks(lo, hi) {
+  const span = hi - lo || 1;
+  const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000].find(s => span / s <= 4) || 20000;
+  const a = Math.floor(lo / step) * step, b = Math.ceil(hi / step) * step;
+  const out = []; for (let v = a; v <= b; v += step) out.push(v);
+  return out;
+}
+
+function painChart(pain, goals) {
+  const H = 190, PT = 18, PB = 18;
+  const ys = pain.map(p => p.y);
+  const ticks = niceTicks(Math.min(0, ...ys), Math.max(0, ...ys));
+  const lo = ticks[0], hi = ticks[ticks.length - 1];
+  const y = v => PT + (hi - v) / (hi - lo || 1) * (H - PT - PB);
+  const n = pain.length;
+  const grid = ticks.map(t => `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" stroke-width="${t === 0 ? 1.5 : 1}" ${t === 0 ? '' : 'stroke-dasharray="2 3"'}/>
+    <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${t > 0 ? '+' + t : t}</text>`).join('');
+  // start the line at the first ever logged day (or the left edge if logging began earlier)
+  const hasPrior = Object.entries(db.entries).some(([d, e]) => d < pain[0].d && typeof e.change === 'number');
+  const start = hasPrior ? 0 : Math.max(0, pain.findIndex(p => p.logged));
+  const pts = pain.slice(start).map((p, i) => [xScale(i + start, n), y(p.y)]);
+  const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = pts.length > 1 ? `${path} L${pts[pts.length - 1][0].toFixed(1)} ${y(0)} L${pts[0][0].toFixed(1)} ${y(0)} Z` : '';
+  const dots = pain.map((p, i) => p.logged ? `<circle cx="${xScale(i, n)}" cy="${y(p.y)}" r="${n > 45 ? 2 : 3.2}" fill="var(--card)" stroke="var(--accent)" stroke-width="2"/>` : '').join('');
+  const stars = goals.map(g => {
+    const i = pain.findIndex(p => p.d === g.achieved);
+    if (i < 0) return '';
+    const x = xScale(i, n);
+    return `<line x1="${x}" x2="${x}" y1="${PT - 4}" y2="${H - PB}" stroke="var(--goal)" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>
+      <text x="${x}" y="${PT - 6}" text-anchor="middle" style="fill:var(--goal);font-size:13px">★<title>${esc(g.text)}</title></text>`;
+  }).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Pain running total">
+    ${grid}${stars}
+    ${area ? `<path d="${area}" fill="var(--accent)" opacity=".08"/>` : ''}
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${xLabels(pain.map(p => p.d), H)}
+  </svg>`;
+}
+
+function stepsChart(steps) {
+  const H = 150, PT = 8, PB = 18;
+  const max = Math.max(...steps.map(s => s.y || 0), 1);
+  const ticks = niceTicks(0, max);
+  const hi = ticks[ticks.length - 1];
+  const y = v => PT + (hi - v) / hi * (H - PT - PB);
+  const n = steps.length;
+  const bw = Math.max(2, Math.min(18, (W - PL - PR) / n - 2));
+  const fmtK = v => v >= 1000 ? (v / 1000) + 'k' : v;
+  const grid = ticks.map(t => `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" ${t ? 'stroke-dasharray="2 3"' : ''}/>
+    <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${fmtK(t)}</text>`).join('');
+  // shift bars inward so the first/last ones aren't clipped
+  const inset = bw / 2;
+  const bx = i => n === 1 ? xScale(0, 1) : PL + inset + i * (W - PL - PR - 2 * inset) / (n - 1);
+  const bars = steps.map((s, i) => s.y == null ? '' :
+    `<rect x="${(bx(i) - bw / 2).toFixed(1)}" y="${y(s.y).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, y(0) - y(s.y)).toFixed(1)}" rx="${Math.min(3, bw / 2)}" fill="var(--accent)" opacity=".75"><title>${fmtShort(s.d)}: ${s.y.toLocaleString()}</title></rect>`).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Steps per day">${grid}${bars}${xLabels(steps.map(s => s.d), H)}</svg>`;
+}
+
+document.querySelectorAll('#range button').forEach(b => b.addEventListener('click', () => {
+  range = Number(b.dataset.r);
+  try { localStorage.setItem(KEY + '.range', range); } catch (e) {}
+  renderProgress();
+}));
+$('log').addEventListener('click', e => {
+  const b = e.target.closest('[data-go]');
+  if (b) { current = b.dataset.go; showTab('today'); }
+});
+
+// Backup
+$('exportBtn').onclick = async () => {
+  const json = JSON.stringify(db, null, 2);
+  const name = `knee-progress-${todayIso()}.json`;
+  const file = new File([json], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!d.entries || !Array.isArray(d.goals)) throw new Error('bad');
+    if (confirm('Replace all current data with this backup?')) { db = d; save(); renderAll(); }
+  } catch (err) { alert('That file is not a valid Knee Progress backup.'); }
+  e.target.value = '';
+};
+
+// ---------- Tabs ----------
+function showTab(name) {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  ['today', 'progress', 'goals'].forEach(v => $('view-' + v).classList.toggle('hidden', v !== name));
+  if (name === 'today') renderToday();
+  if (name === 'progress') renderProgress();
+  if (name === 'goals') renderGoals();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+function renderAll() { renderToday(); renderGoals(); renderProgress(); }
+
+// Jump to the new day if the app was left open overnight
+let lastToday = todayIso();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && todayIso() !== lastToday) {
+    if (current === lastToday) current = todayIso();
+    lastToday = todayIso();
+    renderAll();
+  }
+});
+
+renderToday();
+
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
