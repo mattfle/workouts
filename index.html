@@ -348,6 +348,18 @@
     return parts.join(' · ');
   }
 
+  // Summary from the Knee Progress app in knee/ (same origin, so its localStorage is readable here).
+  function kneeSummary() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem('kneeTracker.v1')); } catch (e) { /* no knee data */ }
+    if (!d || !d.entries) return 'Log pain, steps and goals';
+    let total = 0;
+    for (const e of Object.values(d.entries)) if (typeof e.change === 'number') total += e.change;
+    const today = d.entries[todayStr()];
+    const logged = today && typeof today.change === 'number';
+    return `Pain total ${total > 0 ? '+' + total : total} · ${logged ? 'logged today ✓' : 'not logged today'}`;
+  }
+
   function renderHome() {
     const d = new Date();
     const current = state.cycle.findIndex(w => !w.done);
@@ -380,6 +392,13 @@
     app.innerHTML = `
       <h1>Workouts</h1>
       <p class="sub">${d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+
+      <h2>Knee</h2>
+      <a class="card ex-head" href="knee/" style="margin-bottom:12px">
+        <span class="grow"><span class="ex-name">Knee progress</span><br>
+          <span class="small muted">${kneeSummary()}</span></span>
+        <span class="chev">›</span>
+      </a>
 
       <h2>Cycle</h2>
       <div class="card">
