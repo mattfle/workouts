@@ -352,12 +352,13 @@
   function kneeSummary() {
     let d = null;
     try { d = JSON.parse(localStorage.getItem('kneeTracker.v1')); } catch (e) { /* no knee data */ }
-    if (!d || !d.entries) return 'Log pain, steps and goals';
-    let total = 0;
-    for (const e of Object.values(d.entries)) if (typeof e.change === 'number') total += e.change;
-    const today = d.entries[todayStr()];
-    const logged = today && typeof today.change === 'number';
-    return `Pain total ${total > 0 ? '+' + total : total} · ${logged ? 'logged today ✓' : 'not logged today'}`;
+    if (!d || !d.entries) return 'Log pain, exercises, steps and goals';
+    const last = Object.keys(d.entries).filter(k => typeof d.entries[k].pain === 'number').sort().pop();
+    const today = d.entries[todayStr()] || {};
+    const exDone = Object.keys(today.ex || {}).length;
+    const pain = typeof today.pain === 'number' ? `Pain ${today.pain}/50 today`
+      : last ? `Pain ${d.entries[last].pain}/50 last logged` : 'Pain not logged yet';
+    return `${pain} · ${exDone ? `${exDone} exercise${exDone === 1 ? '' : 's'} done ✓` : 'no exercises yet today'}`;
   }
 
   function renderHome() {

@@ -80,17 +80,44 @@
   .datenav .label strong { display: block; font-size: 20px; }
 
   /* Pain picker */
-  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .seg button { padding: 14px 6px; border-radius: 12px; background: var(--bg); border: 2px solid transparent; font-weight: 600; }
-  .seg button .big { display: block; font-size: 22px; line-height: 1.1; }
-  .seg button[data-v="better"].on { background: var(--better-bg); border-color: var(--better); color: var(--better); }
-  .seg button[data-v="same"].on { background: var(--same-bg); border-color: var(--same); }
-  .seg button[data-v="worse"].on { background: var(--worse-bg); border-color: var(--worse); color: var(--worse); }
-  .stepper { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 14px; }
+  .stepper { display: flex; align-items: center; justify-content: center; gap: 18px; }
   .stepper button { width: 44px; height: 44px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); font-size: 22px; }
-  .stepper .val { font-size: 28px; font-weight: 700; min-width: 70px; text-align: center; }
-  .total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
-  .total b { font-size: 20px; }
+  .stepper .val { font-size: 34px; font-weight: 700; min-width: 80px; text-align: center; line-height: 1.1; }
+  .stepper .val small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+  .pain-range { -webkit-appearance: none; appearance: none; padding: 0; border: 0; height: 28px; margin: 14px 0 2px; background: none; accent-color: var(--accent); }
+  .pain-range:focus { outline: none; }
+  .pain-range::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--better), var(--goal), var(--worse)); }
+  .pain-range::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -10px; border-radius: 50%; background: var(--card); border: 2px solid var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  .pain-range::-moz-range-track { height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--better), var(--goal), var(--worse)); }
+  .pain-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: var(--card); border: 2px solid var(--text); }
+  .pain-range.unset { opacity: .35; }
+  .scale-ends { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); }
+  .scale-ends span:last-child { text-align: right; }
+  .total { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); min-height: 34px; }
+
+  /* Exercises */
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .ex { border-bottom: 1px solid var(--line); padding: 10px 0; }
+  .ex:last-of-type { border-bottom: 0; }
+  .ex-row { display: flex; align-items: center; gap: 12px; }
+  .ex-row .t { flex: 1; min-width: 0; }
+  .ex-row .t small { display: block; color: var(--muted); font-size: 13px; }
+  .check { width: 34px; height: 34px; flex: none; border-radius: 10px; border: 2px solid var(--line); color: transparent; font-weight: 700; font-size: 18px; }
+  .ex.done .check { background: var(--better); border-color: var(--better); color: #fff; }
+  .ex-detail { margin: 10px 0 2px 46px; display: grid; gap: 10px; }
+  .mini-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .mini { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .mini button { width: 32px; height: 32px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); font-size: 18px; color: var(--text); }
+  .mini b { color: var(--text); min-width: 22px; text-align: center; font-size: 16px; }
+  .ease { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
+  .ease span { margin-right: 4px; }
+  .ease button { width: 36px; height: 32px; border-radius: 10px; background: var(--bg); border: 2px solid transparent; font-weight: 600; color: var(--text); }
+  .ease button.on { background: var(--better-bg); border-color: var(--better); color: var(--better); }
+  .link-btn { color: var(--accent); font-weight: 600; padding: 10px 0 0; font-size: 15px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .field-row label, .sheet label { font-size: 13px; color: var(--muted); display: block; }
+  .sheet .btn-primary { width: 100%; padding: 14px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 600; margin-top: 14px; }
+  .sheet .btn-danger { width: 100%; padding: 12px; color: var(--worse); font-weight: 600; margin-top: 4px; }
 
   /* Goals */
   .goal-btn { width: 100%; padding: 14px; border-radius: 12px; border: 2px dashed var(--goal); color: var(--goal); font-weight: 600; margin-top: 4px; }
@@ -173,21 +200,24 @@
     </div>
 
     <div class="card">
-      <h2>Knee pain compared to yesterday</h2>
-      <div class="seg" id="painSeg">
-        <button data-v="better"><span class="big">↓</span>Better</button>
-        <button data-v="same"><span class="big">=</span>Same</button>
-        <button data-v="worse"><span class="big">↑</span>Worse</button>
+      <h2>Knee pain</h2>
+      <div class="stepper">
+        <button id="painMinus" aria-label="Less pain">−</button>
+        <div class="val" id="painVal"></div>
+        <button id="painPlus" aria-label="More pain">+</button>
       </div>
-      <div class="stepper hidden" id="stepper">
-        <button id="amtMinus" aria-label="Less">−</button>
-        <div class="val" id="amtVal"></div>
-        <button id="amtPlus" aria-label="More">+</button>
-      </div>
+      <input type="range" class="pain-range" id="painRange" min="0" max="50" step="1" aria-label="Pain from 0 to 50">
+      <div class="scale-ends"><span>0 · No pain</span><span>50 · Can't do anything or bear weight</span></div>
       <div class="total">
-        <span class="muted small">Running total (lower = less pain)</span>
-        <b id="runTotal">0</b>
+        <span class="muted small" id="painCompare"></span>
+        <button class="icon-btn" id="painClear">Clear</button>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Exercises</h2><span class="muted small" id="exCount"></span></div>
+      <div id="exList"></div>
+      <button class="link-btn" id="exAdd">+ Add exercise</button>
     </div>
 
     <div class="card">
@@ -220,10 +250,10 @@
     </div>
     <div class="stats" id="stats"></div>
     <div class="card">
-      <h2>Pain — running total</h2>
+      <h2>Knee pain (0–50)</h2>
       <div id="painChart"></div>
       <div class="legend">
-        <span>↓ lower = less pain</span>
+        <span>0 = no pain · 50 = can't bear weight</span>
         <span><span class="star">★</span> goal realised</span>
       </div>
     </div>
@@ -281,6 +311,21 @@
   </div>
 </div>
 
+<div id="exSheetWrap" class="hidden">
+  <div class="backdrop" id="exBackdrop"></div>
+  <div class="sheet">
+    <h3 id="exSheetTitle">Exercise settings</h3>
+    <div class="muted small">These sets and reps are prefilled when you tick the exercise off. Days you've already logged keep what you did.</div>
+    <label style="margin-top:12px">Name<input id="exName" enterkeyhint="done"></label>
+    <div class="field-row">
+      <label>Sets<input id="exSets" type="number" inputmode="numeric" pattern="[0-9]*" min="1"></label>
+      <label>Reps<input id="exReps" type="number" inputmode="numeric" pattern="[0-9]*" min="1"></label>
+    </div>
+    <button class="btn-primary" id="exSave">Save</button>
+    <button class="btn-danger" id="exRemove">Remove exercise</button>
+  </div>
+</div>
+
 <nav class="tabs">
   <div class="inner">
     <button data-tab="today" class="on">
@@ -301,12 +346,19 @@
 <script>
 // ---------- Storage ----------
 const KEY = 'kneeTracker.v1';
+const DEFAULT_EXERCISES = ['Double leg heel raises', 'Double leg glute bridges', 'Stand up from seated', 'Straight leg lifts'];
+function withDefaults(d) {
+  if (!Array.isArray(d.exercises)) {
+    d.exercises = DEFAULT_EXERCISES.map((name, i) => ({ id: 'ex' + i, name, sets: 3, reps: 10 }));
+  }
+  return d;
+}
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem(KEY));
-    if (d && d.entries && d.goals) return d;
+    if (d && d.entries && d.goals) return withDefaults(d);
   } catch (e) {}
-  return { entries: {}, goals: [] };
+  return withDefaults({ entries: {}, goals: [] });
 }
 let db = load();
 function save() {
@@ -338,12 +390,14 @@ function setEntry(date, patch) {
   if (Object.keys(e).length) db.entries[date] = e; else delete db.entries[date];
   save();
 }
-function runningTotal(upTo) {
-  let t = 0;
-  for (const [d, e] of Object.entries(db.entries)) if (d <= upTo && typeof e.change === 'number') t += e.change;
-  return t;
+// Most recent logged pain strictly before a date
+function prevPain(date) {
+  const d = Object.keys(db.entries).filter(k => k < date && typeof db.entries[k].pain === 'number').sort().pop();
+  return d ? { d, v: db.entries[d].pain } : null;
 }
+const painLevel = v => v <= 15 ? 'better' : v <= 30 ? 'same' : 'worse';
 const signed = n => n > 0 ? `+${n}` : `${n}`;
+const clampInt = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(v)));
 
 let savedTimer;
 function flashSaved() {
@@ -362,15 +416,24 @@ function renderToday() {
   $('nextDay').disabled = current >= t;
 
   const e = entry(current);
-  const c = e.change;
-  const mode = c === undefined ? null : c < 0 ? 'better' : c > 0 ? 'worse' : 'same';
-  document.querySelectorAll('#painSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === mode));
-  $('stepper').classList.toggle('hidden', !(mode === 'better' || mode === 'worse'));
-  if (mode === 'better' || mode === 'worse') {
-    $('amtVal').textContent = signed(c);
-    $('amtVal').style.color = mode === 'better' ? 'var(--better)' : 'var(--worse)';
+  const p = e.pain;
+  const prev = prevPain(current);
+  const logged = typeof p === 'number';
+  $('painVal').innerHTML = logged ? `${p}<small>out of 50</small>` : `–<small>not logged</small>`;
+  $('painVal').style.color = logged ? `var(--${painLevel(p) === 'same' ? 'goal' : painLevel(p)})` : '';
+  $('painRange').value = logged ? p : prev ? prev.v : 0;
+  $('painRange').classList.toggle('unset', !logged);
+  $('painClear').classList.toggle('hidden', !logged);
+  if (logged && prev) {
+    const diff = p - prev.v;
+    const when = daysBetween(prev.d, current) === 1 ? 'yesterday' : fmtShort(prev.d);
+    $('painCompare').innerHTML = diff === 0 ? `Same as ${when} (${prev.v})`
+      : `<span style="color:var(--${diff < 0 ? 'better' : 'worse'})">${signed(diff)}</span> vs ${when} (${prev.v})`;
+  } else {
+    $('painCompare').textContent = logged ? 'First pain score logged' : prev ? `Last logged: ${prev.v} on ${fmtShort(prev.d)}` : 'Drag the slider to log';
   }
-  $('runTotal').textContent = signed(runningTotal(current)).replace('+0', '0');
+
+  renderExercises();
 
   if (document.activeElement !== $('steps')) $('steps').value = e.steps ?? '';
   if (document.activeElement !== $('note')) $('note').value = e.note ?? '';
@@ -381,25 +444,103 @@ function renderToday() {
   ).join('');
 }
 
-document.querySelectorAll('#painSeg button').forEach(b => b.addEventListener('click', () => {
-  const v = b.dataset.v;
-  const c = entry(current).change;
-  const mag = typeof c === 'number' && c !== 0 ? Math.abs(c) : 1;
-  const curMode = c === undefined ? null : c < 0 ? 'better' : c > 0 ? 'worse' : 'same';
-  if (curMode === v) setEntry(current, { change: null }); // tap again to clear
-  else setEntry(current, { change: v === 'same' ? 0 : v === 'better' ? -mag : mag });
-  renderToday();
-}));
-function bump(delta) {
-  const c = entry(current).change;
-  if (!c) return;
-  const sign = Math.sign(c);
-  const mag = Math.min(10, Math.max(1, Math.abs(c) + delta));
-  setEntry(current, { change: sign * mag });
+function setPain(v) { setEntry(current, { pain: clampInt(v, 0, 50) }); renderToday(); }
+function bumpPain(delta) {
+  const p = entry(current).pain;
+  // first tap on an unlogged day starts from the last logged score
+  setPain(typeof p === 'number' ? p + delta : Number($('painRange').value));
+}
+$('painRange').addEventListener('input', e => setPain(Number(e.target.value)));
+$('painPlus').onclick = () => bumpPain(1);
+$('painMinus').onclick = () => bumpPain(-1);
+$('painClear').onclick = () => { setEntry(current, { pain: null }); renderToday(); };
+
+// ---------- Exercises ----------
+// A day's log stores a snapshot { name, sets, reps, ease } per exercise id,
+// so later changes to an exercise's settings never rewrite past days.
+function renderExercises() {
+  const log = entry(current).ex || {};
+  const shown = db.exercises.filter(x => !x.archived || log[x.id]);
+  const done = shown.filter(x => log[x.id]).length;
+  $('exCount').textContent = shown.length ? `${done}/${shown.length} done` : '';
+  $('exList').innerHTML = shown.length ? shown.map(x => {
+    const l = log[x.id];
+    const sets = l ? l.sets : x.sets, reps = l ? l.reps : x.reps;
+    return `<div class="ex${l ? ' done' : ''}">
+      <div class="ex-row">
+        <button class="check" data-ex-toggle="${x.id}" aria-label="Done">✓</button>
+        <div class="t"><span>${esc(l ? l.name : x.name)}</span><small>${sets} sets × ${reps} reps${l && l.ease ? ` · easiness ${l.ease}/5` : ''}</small></div>
+        <button class="icon-btn" data-ex-settings="${x.id}" aria-label="Settings">⚙︎</button>
+      </div>
+      ${l ? `<div class="ex-detail">
+        <div class="mini-row">
+          <div class="mini">Sets <button data-ex-adj="${x.id}" data-f="sets" data-d="-1">−</button><b>${l.sets}</b><button data-ex-adj="${x.id}" data-f="sets" data-d="1">+</button></div>
+          <div class="mini">Reps <button data-ex-adj="${x.id}" data-f="reps" data-d="-1">−</button><b>${l.reps}</b><button data-ex-adj="${x.id}" data-f="reps" data-d="1">+</button></div>
+        </div>
+        <div class="ease"><span>Easiness</span>${[1, 2, 3, 4, 5].map(n =>
+          `<button class="${l.ease === n ? 'on' : ''}" data-ex-ease="${x.id}" data-n="${n}">${n}</button>`).join('')}</div>
+      </div>` : ''}
+    </div>`;
+  }).join('') : `<div class="empty">No exercises yet.</div>`;
+}
+function updateExLog(fn) {
+  const log = Object.assign({}, entry(current).ex);
+  fn(log);
+  setEntry(current, { ex: Object.keys(log).length ? log : null });
   renderToday();
 }
-$('amtPlus').onclick = () => bump(1);
-$('amtMinus').onclick = () => bump(-1);
+$('exList').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const d = b.dataset;
+  if (d.exToggle) updateExLog(log => {
+    const x = db.exercises.find(x => x.id === d.exToggle);
+    if (log[d.exToggle]) delete log[d.exToggle];
+    else log[d.exToggle] = { name: x.name, sets: x.sets, reps: x.reps };
+  });
+  else if (d.exAdj) updateExLog(log => {
+    const l = log[d.exAdj] = Object.assign({}, log[d.exAdj]);
+    l[d.f] = clampInt(l[d.f] + Number(d.d), 1, 999);
+  });
+  else if (d.exEase) updateExLog(log => {
+    const l = log[d.exEase] = Object.assign({}, log[d.exEase]);
+    const n = Number(d.n);
+    if (l.ease === n) delete l.ease; else l.ease = n; // tap again to clear
+  });
+  else if (d.exSettings) openExSheet(d.exSettings);
+});
+
+let exEditing = null;
+function openExSheet(id) {
+  const x = id && db.exercises.find(x => x.id === id);
+  exEditing = x ? x.id : null;
+  $('exSheetTitle').textContent = x ? 'Exercise settings' : 'New exercise';
+  $('exName').value = x ? x.name : '';
+  $('exSets').value = x ? x.sets : 3;
+  $('exReps').value = x ? x.reps : 10;
+  $('exRemove').classList.toggle('hidden', !x);
+  $('exSheetWrap').classList.remove('hidden');
+  if (!x) $('exName').focus();
+}
+function closeExSheet() { document.activeElement.blur(); $('exSheetWrap').classList.add('hidden'); }
+$('exAdd').onclick = () => openExSheet(null);
+$('exBackdrop').onclick = closeExSheet;
+$('exSave').onclick = () => {
+  const name = $('exName').value.trim();
+  if (!name) { $('exName').focus(); return; }
+  const sets = clampInt(Number($('exSets').value) || 1, 1, 999);
+  const reps = clampInt(Number($('exReps').value) || 1, 1, 999);
+  const x = db.exercises.find(x => x.id === exEditing);
+  if (x) Object.assign(x, { name, sets, reps });
+  else db.exercises.push({ id: uid(), name, sets, reps });
+  save(); closeExSheet(); renderToday();
+};
+$('exRemove').onclick = () => {
+  const x = db.exercises.find(x => x.id === exEditing);
+  if (!x || !confirm(`Remove "${x.name}"? Days you already logged it on keep their record.`)) return;
+  x.archived = true; // keep it so old logs still render
+  save(); closeExSheet(); renderToday();
+};
 
 $('steps').addEventListener('input', e => {
   const v = e.target.value.trim();
@@ -514,27 +655,24 @@ function renderProgress() {
   const n = daysBetween(start, t) + 1;
   const days = Array.from({ length: n }, (_, i) => addDays(start, i));
 
-  // running totals per day (carry forward)
-  let tot = runningTotal(addDays(start, -1));
   const pain = days.map(d => {
-    const e = db.entries[d];
-    if (e && typeof e.change === 'number') tot += e.change;
-    return { d, y: tot, logged: !!(e && typeof e.change === 'number') };
+    const v = db.entries[d]?.pain;
+    return { d, y: typeof v === 'number' ? v : null };
   });
   const steps = days.map(d => ({ d, y: db.entries[d]?.steps ?? null }));
   const goalDays = db.goals.filter(g => g.achieved && g.achieved >= start && g.achieved <= t);
 
   // stats
-  const inRange = days.filter(d => db.entries[d]);
+  const painVals = pain.filter(p => p.y != null).map(p => p.y);
+  const avgPain = painVals.length ? Math.round(painVals.reduce((a, b) => a + b, 0) / painVals.length * 10) / 10 : null;
   const stepVals = steps.filter(s => s.y != null).map(s => s.y);
   const avgSteps = stepVals.length ? Math.round(stepVals.reduce((a, b) => a + b, 0) / stepVals.length) : null;
-  const periodChange = pain.length ? pain[pain.length - 1].y - runningTotal(addDays(start, -1)) : 0;
   $('stats').innerHTML = `
-    <div class="stat"><b style="color:${periodChange < 0 ? 'var(--better)' : periodChange > 0 ? 'var(--worse)' : 'inherit'}">${signed(periodChange).replace('+0', '0')}</b><span>Pain change</span></div>
+    <div class="stat"><b style="color:${avgPain != null ? `var(--${painLevel(avgPain) === 'same' ? 'goal' : painLevel(avgPain)})` : 'inherit'}">${avgPain ?? '–'}</b><span>Avg pain</span></div>
     <div class="stat"><b>${avgSteps != null ? avgSteps.toLocaleString() : '–'}</b><span>Avg steps</span></div>
     <div class="stat"><b>${goalDays.length}</b><span>Goals realised</span></div>`;
 
-  $('painChart').innerHTML = inRange.length ? painChart(pain, goalDays) : `<div class="empty">Log a few days to see your graph.</div>`;
+  $('painChart').innerHTML = painVals.length ? painChart(pain, goalDays) : `<div class="empty">Log your pain score to see your graph.</div>`;
   $('stepsChart').innerHTML = stepVals.length ? stepsChart(steps) : `<div class="empty">No steps logged in this period.</div>`;
 
   // log list (newest first, all time)
@@ -543,12 +681,13 @@ function renderProgress() {
   const logDates = [...new Set([...dates, ...Object.keys(goalsByDay)])].sort().reverse().slice(0, 60);
   $('log').innerHTML = logDates.length ? logDates.map(d => {
     const e = db.entries[d] || {};
-    const c = e.change;
-    const badge = typeof c === 'number'
-      ? `<span class="badge ${c < 0 ? 'better' : c > 0 ? 'worse' : 'same'}">${c === 0 ? 'Same' : signed(c)}</span>` : '';
+    const badge = typeof e.pain === 'number'
+      ? `<span class="badge ${painLevel(e.pain)}">Pain ${e.pain}</span>` : '';
+    const ex = Object.values(e.ex || {});
     return `<button class="log-item" data-go="${d}">
       <div class="log-top"><strong>${fmtLong(d)}</strong>${badge}</div>
       <div class="muted small">${e.steps != null ? `${e.steps.toLocaleString()} steps` : ''}${(goalsByDay[d] || []).map(t => ` <span class="star">★</span> ${esc(t)}`).join('')}</div>
+      ${ex.length ? `<div class="muted small">✓ ${ex.map(x => `${esc(x.name)} ${x.sets}×${x.reps}${x.ease ? ` (${x.ease}/5)` : ''}`).join(' · ')}</div>` : ''}
       ${e.note ? `<div class="log-note">${esc(e.note)}</div>` : ''}
     </button>`;
   }).join('') : `<div class="empty">No entries yet.</div>`;
@@ -571,20 +710,16 @@ function niceTicks(lo, hi) {
 
 function painChart(pain, goals) {
   const H = 190, PT = 18, PB = 18;
-  const ys = pain.map(p => p.y);
-  const ticks = niceTicks(Math.min(0, ...ys), Math.max(0, ...ys));
-  const lo = ticks[0], hi = ticks[ticks.length - 1];
-  const y = v => PT + (hi - v) / (hi - lo || 1) * (H - PT - PB);
+  const ticks = [0, 10, 20, 30, 40, 50];
+  const y = v => PT + (50 - v) / 50 * (H - PT - PB);
   const n = pain.length;
   const grid = ticks.map(t => `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" stroke-width="${t === 0 ? 1.5 : 1}" ${t === 0 ? '' : 'stroke-dasharray="2 3"'}/>
-    <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${t > 0 ? '+' + t : t}</text>`).join('');
-  // start the line at the first ever logged day (or the left edge if logging began earlier)
-  const hasPrior = Object.entries(db.entries).some(([d, e]) => d < pain[0].d && typeof e.change === 'number');
-  const start = hasPrior ? 0 : Math.max(0, pain.findIndex(p => p.logged));
-  const pts = pain.slice(start).map((p, i) => [xScale(i + start, n), y(p.y)]);
+    <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${t}</text>`).join('');
+  // connect logged days; unlogged days in between are skipped over
+  const pts = pain.map((p, i) => p.y == null ? null : [xScale(i, n), y(p.y), p]).filter(Boolean);
   const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
   const area = pts.length > 1 ? `${path} L${pts[pts.length - 1][0].toFixed(1)} ${y(0)} L${pts[0][0].toFixed(1)} ${y(0)} Z` : '';
-  const dots = pain.map((p, i) => p.logged ? `<circle cx="${xScale(i, n)}" cy="${y(p.y)}" r="${n > 45 ? 2 : 3.2}" fill="var(--card)" stroke="var(--accent)" stroke-width="2"/>` : '').join('');
+  const dots = pts.map(([x, py, p]) => `<circle cx="${x}" cy="${py}" r="${n > 45 ? 2 : 3.2}" fill="var(--card)" stroke="var(--accent)" stroke-width="2"><title>${fmtShort(p.d)}: ${p.y}</title></circle>`).join('');
   const stars = goals.map(g => {
     const i = pain.findIndex(p => p.d === g.achieved);
     if (i < 0) return '';
@@ -592,7 +727,7 @@ function painChart(pain, goals) {
     return `<line x1="${x}" x2="${x}" y1="${PT - 4}" y2="${H - PB}" stroke="var(--goal)" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>
       <text x="${x}" y="${PT - 6}" text-anchor="middle" style="fill:var(--goal);font-size:13px">★<title>${esc(g.text)}</title></text>`;
   }).join('');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Pain running total">
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Knee pain per day, 0 to 50">
     ${grid}${stars}
     ${area ? `<path d="${area}" fill="var(--accent)" opacity=".08"/>` : ''}
     <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
@@ -648,7 +783,7 @@ $('importFile').onchange = async e => {
   try {
     const d = JSON.parse(await f.text());
     if (!d.entries || !Array.isArray(d.goals)) throw new Error('bad');
-    if (confirm('Replace all current data with this backup?')) { db = d; save(); renderAll(); }
+    if (confirm('Replace all current data with this backup?')) { db = withDefaults(d); save(); renderAll(); }
   } catch (err) { alert('That file is not a valid Knee Progress backup.'); }
   e.target.value = '';
 };
