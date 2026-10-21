@@ -31,4 +31,4 @@ The app has to be served over HTTPS so it can install and work offline. GitHub P
 Always open it from the Home Screen icon. Safari and the Home Screen app keep separate data.
 
 ## Updating
-After changing files, bump `CACHE` in `sw.js` (for example `workouts-v2`) so phones pick up the new version. The knee section has its own `knee/sw.js` with a separate `CACHE` (`knee-v2`).
+After changing files, bump `CACHE` in `sw.js` (for example `workouts-v2`) so phones pick up the new version. The knee section has its own `knee/sw.js` with a separate `CACHE` (`knee-v3`).
