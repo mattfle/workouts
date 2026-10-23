@@ -19,7 +19,7 @@ A separate section in `knee/`, opened from the **Knee** card on the home screen 
 - Daily exercise checklist: each exercise has default sets × reps (set via ⚙︎) that are prefilled when ticked; each day stores its own sets, reps and easiness (1–5), so changing the defaults later doesn't alter past days
 - Steps and a free-text note for each day
 - Goals list, where you mark the day each goal is realised
-- Progress charts (pain 0–50 and steps) over 2 weeks, a month, 3 months or all time, plus a day-by-day log
+- Progress charts (pain 0–50, steps, exercise reps per day stacked by exercise, and a pain-vs-activity view with a same-day / next-day pain comparison) over 2 weeks, a month, 3 months or all time, plus a day-by-day log
 - Its own Export/Import backup, separate from the workouts one
 
 ## Put it on the iPhone
@@ -31,4 +31,4 @@ The app has to be served over HTTPS so it can install and work offline. GitHub P
 Always open it from the Home Screen icon. Safari and the Home Screen app keep separate data.
 
 ## Updating
-After changing files, bump `CACHE` in `sw.js` (for example `workouts-v2`) so phones pick up the new version. The knee section has its own `knee/sw.js` with a separate `CACHE` (`knee-v3`).
+After changing files, bump `CACHE` in `sw.js` (for example `workouts-v2`) so phones pick up the new version. The knee section has its own `knee/sw.js` with a separate `CACHE` (`knee-v4`).

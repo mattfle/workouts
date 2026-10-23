@@ -28,6 +28,8 @@
     --same: #6b6f76;
     --same-bg: #ecebe7;
     --goal: #c98a0b;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
     --radius: 16px;
   }
   @media (prefers-color-scheme: dark) {
@@ -45,6 +47,8 @@
       --same: #a5a7ad;
       --same-bg: #2c2d31;
       --goal: #f0b440;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -169,6 +173,19 @@
   .range button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
   svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
   svg.chart text { fill: var(--muted); font-size: 10px; }
+  .chart-wrap { position: relative; touch-action: pan-y; }
+  .tip { position: absolute; top: 0; z-index: 2; pointer-events: none; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.18); min-width: 150px; max-width: 230px; }
+  .tip b { display: block; margin-bottom: 3px; }
+  .tip .r { display: flex; align-items: center; gap: 6px; color: var(--muted); line-height: 1.5; }
+  .tip .r em { margin-left: auto; padding-left: 10px; font-style: normal; font-weight: 600; color: var(--text); white-space: nowrap; }
+  .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+  .legend .sw { margin-right: 5px; vertical-align: -1px; }
+  .corr { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 14px; }
+  .corr th, .corr td { text-align: right; padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  .corr th:first-child, .corr td:first-child { text-align: left; }
+  .corr th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .corr td small { color: var(--muted); font-size: 11px; }
+  .corr tr:last-child td { border-bottom: 0; }
   .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 8px; }
   .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
   .stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
@@ -260,6 +277,16 @@
     <div class="card">
       <h2>Steps</h2>
       <div id="stepsChart"></div>
+    </div>
+    <div class="card">
+      <h2>Exercises — total reps per day</h2>
+      <div class="chart-wrap" id="exChart"></div>
+      <div class="legend" id="exLegend"></div>
+    </div>
+    <div class="card">
+      <h2>Pain vs activity</h2>
+      <div class="chart-wrap" id="comboChart"></div>
+      <div id="corr"></div>
     </div>
     <div class="card">
       <h2>Log</h2>
@@ -675,6 +702,15 @@ function renderProgress() {
   $('painChart').innerHTML = painVals.length ? painChart(pain, goalDays) : `<div class="empty">Log your pain score to see your graph.</div>`;
   $('stepsChart').innerHTML = stepVals.length ? stepsChart(steps) : `<div class="empty">No steps logged in this period.</div>`;
 
+  const exDays = days.map(d => ({ d, items: exItems(d) }));
+  const exUsed = db.exercises.filter(x => exDays.some(e => e.items.some(it => it.id === x.id)));
+  $('exChart').innerHTML = exUsed.length ? exChart(exDays) : `<div class="empty">No exercises logged in this period.</div>`;
+  $('exLegend').innerHTML = exUsed.map(x => `<span><span class="sw" style="background:${exColor(x.id)}"></span>${esc(x.name)}</span>`).join('');
+
+  const hasAny = painVals.length || stepVals.length || exUsed.length;
+  $('comboChart').innerHTML = hasAny ? comboChart(days) : `<div class="empty">Log pain, steps and exercises to compare them.</div>`;
+  $('corr').innerHTML = hasAny ? corrTable(days) : '';
+
   // log list (newest first, all time)
   const goalsByDay = {};
   db.goals.forEach(g => { if (g.achieved) (goalsByDay[g.achieved] ||= []).push(g.text); });
@@ -753,6 +789,159 @@ function stepsChart(steps) {
     `<rect x="${(bx(i) - bw / 2).toFixed(1)}" y="${y(s.y).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, y(0) - y(s.y)).toFixed(1)}" rx="${Math.min(3, bw / 2)}" fill="var(--accent)" opacity=".75"><title>${fmtShort(s.d)}: ${s.y.toLocaleString()}</title></rect>`).join('');
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Steps per day">${grid}${bars}${xLabels(steps.map(s => s.d), H)}</svg>`;
 }
+
+// ---------- Exercise & comparison charts ----------
+// Each exercise keeps one colour slot by its position in the list, so colours never shift between days or ranges.
+const exColor = id => { const i = db.exercises.findIndex(x => x.id === id); return i < 0 ? 'var(--muted)' : `var(--s${i % 8 + 1})`; };
+const exOrder = id => { const i = db.exercises.findIndex(x => x.id === id); return i < 0 ? 999 : i; };
+function exItems(d) {
+  return Object.entries(db.entries[d]?.ex || {})
+    .map(([id, l]) => ({ id, ...l, total: l.sets * l.reps }))
+    .sort((a, b) => exOrder(a.id) - exOrder(b.id));
+}
+const exTotal = items => items.reduce((a, it) => a + it.total, 0);
+const fmtK = v => v >= 1000 ? (Math.round(v / 100) / 10) + 'k' : v;
+// Bar with only its top corners rounded, so it sits flat on the baseline / the segment below
+function topRounded(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h));
+  return `M${x.toFixed(1)} ${(y + h).toFixed(1)}V${(y + r).toFixed(1)}Q${x.toFixed(1)} ${y.toFixed(1)} ${(x + r).toFixed(1)} ${y.toFixed(1)}H${(x + w - r).toFixed(1)}Q${(x + w).toFixed(1)} ${y.toFixed(1)} ${(x + w).toFixed(1)} ${(y + r).toFixed(1)}V${(y + h).toFixed(1)}Z`;
+}
+// Invisible full-height column per day: the tap/hover target for tooltips
+function hitCols(n, top, bottom) {
+  const step = n === 1 ? W - PL - PR : (W - PL - PR) / (n - 1);
+  return Array.from({ length: n }, (_, i) =>
+    `<rect data-i="${i}" x="${(xScale(i, n) - step / 2).toFixed(1)}" y="${top}" width="${step.toFixed(1)}" height="${bottom - top}" fill="transparent"/>`).join('');
+}
+const tipRow = (label, value, color) => `<div class="r">${color ? `<span class="sw" style="background:${color}"></span>` : ''}${label}<em>${value}</em></div>`;
+
+const tipData = {};
+function bindTips(id) {
+  const wrap = $(id);
+  const hide = () => {
+    wrap.querySelector('.tip')?.remove();
+    const xh = wrap.querySelector('.xh'); if (xh) xh.style.display = 'none';
+  };
+  const show = e => {
+    const t = e.target.closest('[data-i]');
+    const data = tipData[id];
+    if (!t || !data) return hide();
+    const i = Number(t.dataset.i);
+    let tip = wrap.querySelector('.tip');
+    if (!tip) { tip = document.createElement('div'); tip.className = 'tip'; wrap.appendChild(tip); }
+    tip.innerHTML = data.html[i];
+    const xh = wrap.querySelector('.xh');
+    if (xh) { xh.setAttribute('x1', data.x[i]); xh.setAttribute('x2', data.x[i]); xh.style.display = ''; }
+    const scale = wrap.querySelector('svg').getBoundingClientRect().width / W;
+    const x = data.x[i] * scale, tw = tip.offsetWidth, ww = wrap.clientWidth;
+    tip.style.left = Math.max(0, x + 14 + tw > ww ? x - tw - 14 : x + 14) + 'px';
+  };
+  wrap.addEventListener('pointerdown', show);
+  wrap.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') show(e); });
+  wrap.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hide(); });
+  document.addEventListener('pointerdown', e => { if (!wrap.contains(e.target)) hide(); });
+}
+
+function exChart(exDays) {
+  const H = 160, PT = 8, PB = 18;
+  const ticks = niceTicks(0, Math.max(1, ...exDays.map(e => exTotal(e.items))));
+  const hi = ticks[ticks.length - 1];
+  const y = v => PT + (hi - v) / hi * (H - PT - PB);
+  const n = exDays.length;
+  const bw = Math.max(3, Math.min(18, (W - PL - PR) / n - 2));
+  const grid = ticks.map(t => `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" ${t ? 'stroke-dasharray="2 3"' : ''}/>
+    <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${fmtK(t)}</text>`).join('');
+  const inset = bw / 2;
+  const bx = i => n === 1 ? xScale(0, 1) : PL + inset + i * (W - PL - PR - 2 * inset) / (n - 1);
+  const bars = exDays.map((e, i) => {
+    let acc = 0;
+    return e.items.map((it, k) => {
+      const y0 = y(acc), y1 = y(acc + it.total);
+      acc += it.total;
+      const gap = k ? 2 : 0; // 2px surface gap between stacked segments
+      const h = Math.max(1, y0 - y1 - gap);
+      const x = bx(i) - bw / 2;
+      return k === e.items.length - 1
+        ? `<path d="${topRounded(x, y1, bw, h, 3)}" fill="${exColor(it.id)}"/>`
+        : `<rect x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${exColor(it.id)}"/>`;
+    }).join('');
+  }).join('');
+  tipData.exChart = {
+    x: exDays.map((_, i) => bx(i)),
+    html: exDays.map(e => `<b>${fmtLong(e.d)}</b>` + (e.items.length
+      ? e.items.map(it => tipRow(esc(it.name), `${it.sets}×${it.reps}${it.ease ? ` · ${it.ease}/5` : ''}`, exColor(it.id))).join('')
+        + tipRow('Total reps', exTotal(e.items))
+      : `<div class="r">No exercises</div>`)),
+  };
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Exercise reps per day, stacked by exercise">${grid}${bars}${hitCols(n, 0, H - PB)}${xLabels(exDays.map(e => e.d), H)}</svg>`;
+}
+
+// Three aligned panels sharing one date axis (separate y-scales, never a dual axis)
+function comboChart(days) {
+  const n = days.length, H = 266;
+  const P = [
+    { key: 'pain', label: 'Pain (0–50)', top: 14, h: 84 },
+    { key: 'steps', label: 'Steps', top: 122, h: 48 },
+    { key: 'reps', label: 'Exercise reps', top: 194, h: 48 },
+  ];
+  const vals = days.map(d => {
+    const e = db.entries[d] || {}, items = exItems(d);
+    return { d, pain: typeof e.pain === 'number' ? e.pain : null, steps: e.steps ?? null, reps: items.length ? exTotal(items) : null, items };
+  });
+  const bw = Math.max(2, Math.min(10, (W - PL - PR) / n - 2));
+  let out = '';
+  for (const p of P) {
+    const max = p.key === 'pain' ? 50 : niceTicks(0, Math.max(1, ...vals.map(v => v[p.key] || 0))).pop();
+    const y = v => p.top + p.h - v / max * p.h;
+    out += `<text x="${PL}" y="${p.top - 5}" style="fill:var(--text);font-weight:600">${p.label}</text>`;
+    const ticks = p.key === 'pain' ? [0, 25, 50] : [0, max];
+    out += ticks.map(t => `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" ${t ? 'stroke-dasharray="2 3"' : ''}/>
+      <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${fmtK(t)}</text>`).join('');
+    if (p.key === 'pain') {
+      const pts = vals.map((v, i) => v.pain == null ? null : [xScale(i, n), y(v.pain)]).filter(Boolean);
+      out += `<path d="${pts.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+      out += pts.map(q => `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="${n > 45 ? 2 : 3}" fill="var(--card)" stroke="var(--accent)" stroke-width="2"/>`).join('');
+    } else {
+      out += vals.map((v, i) => v[p.key] == null ? '' :
+        `<path d="${topRounded(xScale(i, n) - bw / 2, y(v[p.key]), bw, Math.max(1, y(0) - y(v[p.key])), 2)}" fill="var(--muted)" opacity=".6"/>`).join('');
+    }
+  }
+  tipData.comboChart = {
+    x: vals.map((_, i) => xScale(i, n)),
+    html: vals.map(v => `<b>${fmtLong(v.d)}</b>`
+      + tipRow('Pain', v.pain != null ? `${v.pain}/50` : '–')
+      + tipRow('Steps', v.steps != null ? v.steps.toLocaleString() : '–')
+      + tipRow('Exercises', v.items.length ? `${v.items.length} · ${v.reps} reps` : '–')),
+  };
+  const crosshair = `<line class="xh" y1="${P[0].top - 4}" y2="${P[2].top + P[2].h}" stroke="var(--text)" stroke-width="1" opacity=".35" style="display:none"/>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Pain, steps and exercise reps per day on a shared date axis">${out}${crosshair}${hitCols(n, 0, H - 18)}${xLabels(days, H)}</svg>`;
+}
+
+// Average pain on more- vs less-active days, same day and the day after
+function corrTable(days) {
+  const pain = d => { const v = db.entries[d]?.pain; return typeof v === 'number' ? v : null; };
+  const avg = (ds, offset) => {
+    const v = ds.map(d => pain(addDays(d, offset))).filter(x => x != null);
+    return v.length >= 2 ? `${Math.round(v.reduce((a, b) => a + b, 0) / v.length * 10) / 10} <small>(${v.length}d)</small>` : '–';
+  };
+  const stepDays = days.filter(d => db.entries[d]?.steps != null);
+  const sorted = stepDays.map(d => db.entries[d].steps).sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
+  const exDaysYes = days.filter(d => Object.keys(db.entries[d]?.ex || {}).length);
+  const exDaysNo = days.filter(d => !Object.keys(db.entries[d]?.ex || {}).length && pain(d) != null);
+  const rows = [];
+  if (median != null) {
+    rows.push([`≥ ${median.toLocaleString()} steps`, stepDays.filter(d => db.entries[d].steps >= median)]);
+    rows.push([`&lt; ${median.toLocaleString()} steps`, stepDays.filter(d => db.entries[d].steps < median)]);
+  }
+  rows.push(['Did exercises', exDaysYes], ['No exercises', exDaysNo]);
+  return `<table class="corr">
+    <tr><th>Average pain</th><th>Same day</th><th>Next day</th></tr>
+    ${rows.map(([label, ds]) => `<tr><td>${label}</td><td>${avg(ds, 0)}</td><td>${avg(ds, 1)}</td></tr>`).join('')}
+  </table>
+  <p class="muted small" style="margin:8px 0 0">Steps are split at your median for this period. Needs at least 2 days per cell; (d) is the number of days. More logging makes the pattern more reliable.</p>`;
+}
+bindTips('exChart');
+bindTips('comboChart');
 
 document.querySelectorAll('#range button').forEach(b => b.addEventListener('click', () => {
   range = Number(b.dataset.r);
