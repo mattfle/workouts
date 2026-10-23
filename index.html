@@ -28,6 +28,8 @@
     --accent-soft: #ebe8fb;
     --on-accent: #ffffff;
     --danger: #c9302c;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -44,6 +46,8 @@
       --accent-soft: #29244d;
       --on-accent: #14112b;
       --danger: #ff6961;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
     }
   }
   :root[data-theme="dark"] {
@@ -60,6 +64,8 @@
     --accent-soft: #29244d;
     --on-accent: #14112b;
     --danger: #ff6961;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -187,6 +193,12 @@
   }
   .tip b { font-size: 14px; }
 
+  .vol-range { margin-bottom: 10px; }
+  .vol-range button { padding: 6px 0; font-size: 13px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--text-2); margin-top: 8px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .tip .sw { margin-right: 4px; }
+
   .hist { margin-top: 10px; }
   .hist-row { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; font-variant-numeric: tabular-nums; }
   .hist-row .d { width: 64px; color: var(--text-2); flex: none; }
@@ -215,6 +227,9 @@
     iso: { label: 'Isometric', tag: 'ISO', amount: 'secs', amountLabel: 'Hold time (s)', metricLabel: 'Time', fmt: v => `${fmtNum(v)}s` },
     dyn: { label: 'Dynamic', tag: 'DYN', amount: 'reps', amountLabel: 'Reps', metricLabel: 'Reps', fmt: v => `${fmtNum(v)} reps` },
   };
+  // Rep-equivalents for the reps chart: one rep ≈ 3 s under tension at a normal tempo,
+  // so an isometric hold counts as secs / 3 reps. Guitar uses its own minutes-per-rep setting.
+  const SECS_PER_REP = 3;
   const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
   // ---------- helpers ----------
@@ -278,7 +293,7 @@
       const raw = localStorage.getItem(KEY);
       if (raw) { const d = JSON.parse(raw); if (d && Array.isArray(d.exercises)) return migrate(d); }
     } catch (e) { /* fall through to seed */ }
-    return seed();
+    return migrate(seed());
   }
   // Older data had no sets; her routine is 2 sets of each.
   function migrate(d) {
@@ -287,6 +302,8 @@
       if (sec.sets == null) sec.sets = 2;
       for (const h of sec.history) if (h.sets == null) h.sets = 2;
     }
+    // Guitar is logged in minutes and converted to rep-equivalents (default 2 min ≈ 1 rep).
+    if (!d.guitar) d.guitar = { minutes: 30, minsPerRep: 2, history: [] };
     return d;
   }
   function save() {
@@ -297,7 +314,8 @@
   save();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
-  const ui = { tab: 'iso', metric: { iso: 'weight', dyn: 'weight' } };
+  const ui = { tab: 'iso', metric: { iso: 'weight', dyn: 'weight' }, range: 30 };
+  try { const r = localStorage.getItem(KEY + '.range'); if (r !== null) ui.range = Number(r); } catch (e) { /* default range */ }
 
   // ---------- domain logic ----------
   const findEx = id => state.exercises.find(e => e.id === id);
@@ -329,6 +347,14 @@
     } else {
       sec.timesDone = 0;
     }
+  }
+
+  const guitarToday = () => state.guitar.history.find(h => h.date === todayStr());
+  const guitarReps = mins => Math.round(mins / (state.guitar.minsPerRep || 2) * 10) / 10;
+  function toggleGuitar() {
+    const g = state.guitar, t = todayStr();
+    if (guitarToday()) g.history = g.history.filter(h => h.date !== t);
+    else { g.history.push({ date: t, minutes: g.minutes }); g.history.sort((a, b) => a.date.localeCompare(b.date)); }
   }
 
   function setFeel(ex, kind, v) {
@@ -411,7 +437,29 @@
 
       <h2>Exercises</h2>
       ${list}
+      <div class="card">
+        <a class="ex-head" href="#/guitar">
+          <span class="ex-name">Guitar</span><span class="chev">›</span>
+        </a>
+        <div class="line">
+          <span class="tag">MIN</span>
+          <span class="grow cfg">${fmtNum(state.guitar.minutes)} min · ≈ ${fmtNum(guitarReps(state.guitar.minutes))} reps</span>
+          <span class="count">×${state.guitar.history.length}</span>
+          <button class="check" data-act="tick-guitar" aria-pressed="${!!guitarToday()}" aria-label="Guitar done today">${CHECK_SVG}</button>
+        </div>
+      </div>
       <button class="btn" data-act="add">+ Add exercise</button>
+
+      <h2>Reps per day</h2>
+      <div class="card">
+        <div class="seg vol-range">
+          ${[[7, 'Week'], [14, '2 wks'], [30, 'Month'], [90, '3 mo'], [0, 'All']].map(([r, l]) =>
+            `<button data-act="range" data-r="${r}" aria-pressed="${ui.range === r}">${l}</button>`).join('')}
+        </div>
+        <div class="chart" id="volChart"></div>
+        <div class="legend" id="volLegend"></div>
+        <p class="small muted" style="margin:10px 0 0">Isometric holds count as 1 rep per ${SECS_PER_REP} s held. Guitar counts as 1 rep per ${fmtNum(state.guitar.minsPerRep)} min (change it on the Guitar page).</p>
+      </div>
 
       <h2>Backup</h2>
       <div class="btn-row">
@@ -419,6 +467,51 @@
         <button class="btn" data-act="import">Import</button>
       </div>
       <p class="small muted" style="margin:0 4px">Everything is saved on this phone only. Export now and then to keep a copy.</p>
+    `;
+    drawVolume(document.getElementById('volChart'));
+  }
+
+  function renderGuitar() {
+    const g = state.guitar, t = guitarToday();
+    const hist = g.history.slice().reverse().map(h => `
+      <div class="hist-row">
+        <span class="d">${fmtDate(h.date)}</span>
+        <span class="grow">${fmtNum(h.minutes)} min · ≈ ${fmtNum(guitarReps(h.minutes))} reps</span>
+        <button class="x" data-act="g-del" data-date="${h.date}" aria-label="Delete entry from ${fmtDate(h.date)}">×</button>
+      </div>`).join('');
+    app.innerHTML = `
+      <div class="topbar"><a class="back" href="#/"><span>‹</span>Workouts</a></div>
+      <h1>Guitar</h1>
+
+      <h2>Today</h2>
+      <div class="card">
+        <button class="done-btn" data-act="tick-guitar" aria-pressed="${!!t}">
+          ${CHECK_SVG}<span>${t ? 'Done today' : 'Mark done today'}</span>
+        </button>
+        ${t ? `<div class="times">
+          <div><div>Minutes today</div><div class="small muted">≈ ${fmtNum(guitarReps(t.minutes))} reps</div></div>
+          <div class="stepper">
+            <button class="step" data-act="g-min" data-d="-5" aria-label="5 minutes less">−</button>
+            <span class="times-num">${fmtNum(t.minutes)}</span>
+            <button class="step" data-act="g-min" data-d="5" aria-label="5 minutes more">+</button>
+          </div>
+        </div>` : ''}
+      </div>
+
+      <h2>Setup</h2>
+      <div class="card">
+        <div class="field">
+          <label for="g-minutes">Usual minutes<div class="small muted">Prefilled when you tick it off</div></label>
+          <input id="g-minutes" inputmode="numeric" value="${fmtNum(g.minutes)}">
+        </div>
+        <div class="field">
+          <label for="g-ratio">Minutes per rep<div class="small muted">30 min ≈ ${fmtNum(guitarReps(30))} reps</div></label>
+          <input id="g-ratio" inputmode="decimal" value="${fmtNum(g.minsPerRep)}">
+        </div>
+      </div>
+      <p class="small muted" style="margin:0 4px">Fretting is a light, on-and-off grip held for a long time, so it counts for much less per minute than a weighted hold. Each isometric rep is a ${SECS_PER_REP} s hold under load. At the default 2 min per rep, a 30 min session counts about the same as one exercise.</p>
+
+      ${g.history.length ? `<h2>History</h2><div class="card"><details class="hist" open><summary>${g.history.length} session${g.history.length === 1 ? '' : 's'}</summary>${hist}</details></div>` : ''}
     `;
   }
 
@@ -604,6 +697,96 @@
     hideTip = hide;
   }
 
+  // Stacked bars of rep-equivalents per day, one colour per exercise (guitar always last, slot 8).
+  const exColor = i => `var(--s${i % 7 + 1})`;
+  function volumeDays() {
+    const t = todayStr();
+    const shift = (s, n) => { const d = dateOf(s); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    let start = ui.range ? shift(t, -(ui.range - 1)) : null;
+    if (!start) {
+      const all = state.exercises.flatMap(ex => [...ex.iso.history, ...ex.dyn.history]).concat(state.guitar.history).map(h => h.date).sort();
+      start = all[0] && all[0] < shift(t, -6) ? all[0] : shift(t, -6);
+    }
+    const days = [];
+    for (let d = start; d <= t; d = shift(d, 1)) days.push(d);
+    return days.map(date => {
+      const segs = [];
+      state.exercises.forEach((ex, i) => {
+        const iso = ex.iso.history.find(h => h.date === date), dyn = ex.dyn.history.find(h => h.date === date);
+        const reps = (iso ? (iso.sets || 0) * (iso.secs || 0) / SECS_PER_REP : 0) + (dyn ? (dyn.sets || 0) * (dyn.reps || 0) : 0);
+        if (!reps) return;
+        const parts = [iso && `ISO ${fmtNum(iso.sets)}×${fmtNum(iso.secs)}s`, dyn && `DYN ${fmtNum(dyn.sets)}×${fmtNum(dyn.reps)}`].filter(Boolean);
+        segs.push({ name: ex.name, color: exColor(i), reps, detail: parts.join(' + ') });
+      });
+      const g = state.guitar.history.find(h => h.date === date);
+      if (g && g.minutes) segs.push({ name: 'Guitar', color: 'var(--s8)', reps: guitarReps(g.minutes), detail: `${fmtNum(g.minutes)} min` });
+      return { date, segs, total: segs.reduce((a, x) => a + x.reps, 0) };
+    });
+  }
+
+  function drawVolume(el) {
+    const days = volumeDays();
+    const series = [...state.exercises.map((ex, i) => ({ name: ex.name, color: exColor(i) })), { name: 'Guitar', color: 'var(--s8)' }]
+      .filter(x => days.some(d => d.segs.some(sg => sg.name === x.name)));
+    document.getElementById('volLegend').innerHTML = series.map(x => `<span><span class="sw" style="background:${x.color}"></span>${esc(x.name)}</span>`).join('');
+    if (!series.length) {
+      el.innerHTML = `<p class="empty">Nothing logged in this period yet. Ticked exercises and guitar show up here.</p>`;
+      return;
+    }
+    const W = el.clientWidth, H = el.clientHeight;
+    const m = { l: 34, r: 8, t: 10, b: 22 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b, n = days.length;
+    const ticks = niceTicks(0, Math.max(1, ...days.map(d => d.total)), 4).filter(v => v >= 0);
+    const top = ticks[ticks.length - 1];
+    const sy = v => m.t + ih - v / top * ih;
+    const bw = Math.max(3, Math.min(18, iw / n - 3));
+    const sx = i => m.l + bw / 2 + (n === 1 ? (iw - bw) / 2 : i * (iw - bw) / (n - 1));
+    const grid = ticks.map(v => `
+      <line x1="${m.l}" x2="${W - m.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="var(--grid)" stroke-width="1"/>
+      <text class="axis" x="${m.l - 6}" y="${sy(v) + 4}" text-anchor="end">${fmtNum(v)}</text>`).join('');
+    const xi = [...new Set([0, Math.floor((n - 1) / 2), n - 1])];
+    const xLabels = xi.map((i, k) => `<text class="axis" x="${sx(i)}" y="${H - 4}" text-anchor="${n === 1 ? 'middle' : k === 0 ? 'start' : k === xi.length - 1 ? 'end' : 'middle'}">${fmtDate(days[i].date)}</text>`).join('');
+    // flat on the baseline, 2px gap between stacked segments, only the top segment rounded
+    const bars = days.map((d, i) => {
+      let acc = 0;
+      return d.segs.map((sg, k) => {
+        const y0 = sy(acc), y1 = sy(acc + sg.reps);
+        acc += sg.reps;
+        const h = Math.max(1, y0 - y1 - (k ? 2 : 0)), x = sx(i) - bw / 2;
+        if (k < d.segs.length - 1) return `<rect x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${sg.color}"/>`;
+        const r = Math.min(3, bw / 2, h);
+        return `<path d="M${x} ${y1 + h}V${y1 + r}Q${x} ${y1} ${x + r} ${y1}H${x + bw - r}Q${x + bw} ${y1} ${x + bw} ${y1 + r}V${y1 + h}Z" fill="${sg.color}"/>`;
+      }).join('');
+    }).join('');
+
+    el.innerHTML = `
+      <svg width="${W}" height="${H}" role="img" aria-label="Reps per day, stacked by exercise">
+        ${grid}${xLabels}
+        <rect id="vhot" y="${m.t}" height="${ih}" fill="var(--text)" opacity=".06" visibility="hidden"/>
+        ${bars}
+      </svg>
+      <div class="tip" id="vtip" style="white-space:normal;width:max-content;max-width:${W}px"></div>`;
+
+    const svg = el.querySelector('svg'), tip = el.querySelector('#vtip'), hot = el.querySelector('#vhot');
+    function show(clientX) {
+      const x = clientX - svg.getBoundingClientRect().left;
+      const i = Math.max(0, Math.min(n - 1, n === 1 ? 0 : Math.round((x - m.l - bw / 2) / ((iw - bw) / (n - 1)))));
+      const d = days[i], px = sx(i);
+      hot.setAttribute('x', px - bw / 2 - 3); hot.setAttribute('width', bw + 6); hot.setAttribute('visibility', 'visible');
+      tip.innerHTML = `${fmtDate(d.date)}` + (d.segs.length
+        ? d.segs.slice().reverse().map(sg => `<br><span class="sw" style="background:${sg.color}"></span>${esc(sg.name)} · ${sg.detail} ≈ <b>${fmtNum(Math.round(sg.reps))}</b>`).join('') + `<br>Total ≈ <b>${fmtNum(Math.round(d.total))}</b> reps`
+        : '<br>Nothing logged');
+      tip.style.display = 'block';
+      const half = tip.offsetWidth / 2;
+      tip.style.left = Math.min(Math.max(px, half), W - half) + 'px';
+    }
+    function hide() { hot.setAttribute('visibility', 'hidden'); tip.style.display = 'none'; }
+    svg.addEventListener('pointerdown', e => show(e.clientX));
+    svg.addEventListener('pointermove', e => show(e.clientX));
+    svg.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hide(); });
+    hideTip = hide;
+  }
+
   let hideTip = null;
   document.addEventListener('pointerdown', e => { if (hideTip && !e.target.closest('.chart')) hideTip(); });
 
@@ -613,15 +796,16 @@
     return m ? findEx(m[1]) : null;
   }
   let lastRoute = null;
+  const isGuitar = () => location.hash === '#/guitar';
   function render() {
     const ex = currentEx();
-    const route = ex ? ex.id : 'home';
+    const route = ex ? ex.id : isGuitar() ? 'guitar' : 'home';
     if (route !== lastRoute) {
       if (ex) ui.tab = 'iso';
       window.scrollTo(0, 0);
       lastRoute = route;
     }
-    if (ex) renderExercise(ex); else renderHome();
+    if (ex) renderExercise(ex); else if (isGuitar()) renderGuitar(); else renderHome();
   }
   function commit() { save(); render(); }
 
@@ -634,6 +818,16 @@
 
     switch (act) {
       case 'tick': toggleDone(ex, b.dataset.kind); break;
+      case 'tick-guitar': toggleGuitar(); break;
+      case 'g-min': { const t = guitarToday(); if (t) t.minutes = Math.max(5, (t.minutes || 0) + +b.dataset.d); break; }
+      case 'g-del':
+        if (!confirm(`Delete the guitar session from ${fmtDate(b.dataset.date)}?`)) return;
+        state.guitar.history = state.guitar.history.filter(h => h.date !== b.dataset.date);
+        break;
+      case 'range':
+        ui.range = +b.dataset.r;
+        try { localStorage.setItem(KEY + '.range', ui.range); } catch (err) { /* not remembered */ }
+        return render();
       case 'week': state.cycle[+b.dataset.i].done = !state.cycle[+b.dataset.i].done; break;
       case 'new-cycle': state.cycle.forEach(w => { w.done = false; }); break;
       case 'tab': ui.tab = b.dataset.kind; return render();
@@ -672,6 +866,11 @@
 
   app.addEventListener('change', e => {
     const t = e.target, ex = currentEx();
+    if (t.id === 'g-minutes' || t.id === 'g-ratio') {
+      const v = parseNum(t.value);
+      if (v != null && v > 0) state.guitar[t.id === 'g-minutes' ? 'minutes' : 'minsPerRep'] = v;
+      return commit();
+    }
     if (!ex) return;
     if (t.id === 'f-name') { ex.name = t.value.trim() || ex.name; return commit(); }
     if (t.id === 'f-assisted') { ex.assisted = t.checked; return commit(); }
@@ -714,7 +913,7 @@
       const d = JSON.parse(await f.text());
       if (!d || !Array.isArray(d.exercises) || !Array.isArray(d.cycle)) throw new Error('bad file');
       if (!confirm('Replace all current data with this backup?')) return;
-      state = d; save(); location.hash = '#/'; render();
+      state = migrate(d); save(); location.hash = '#/'; render();
     } catch (err) {
       alert('That file doesn’t look like a workouts backup.');
     }
@@ -722,7 +921,7 @@
 
   window.addEventListener('hashchange', render);
   let rw = window.innerWidth;
-  window.addEventListener('resize', () => { if (window.innerWidth !== rw) { rw = window.innerWidth; if (currentEx()) render(); } });
+  window.addEventListener('resize', () => { if (window.innerWidth !== rw) { rw = window.innerWidth; render(); } });
   // Re-render when the app comes back to the foreground on a new day, so "today" ticks reset.
   let shownDay = todayStr();
   function checkNewDay() {
