@@ -95,8 +95,16 @@
   .pain-range::-moz-range-track { height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--better), var(--goal), var(--worse)); }
   .pain-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: var(--card); border: 2px solid var(--text); }
   .pain-range.unset { opacity: .35; }
-  .scale-ends { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); }
-  .scale-ends span:last-child { text-align: right; }
+  /* thumb is 28px wide, so value v sits at 14px + v/50 of the remaining track */
+  .ticks { position: relative; height: 22px; margin: 0 14px; }
+  .ticks span { position: absolute; top: 0; transform: translateX(-50%); font-size: 11px; color: var(--muted); padding-top: 6px; }
+  .ticks span::before { content: ''; position: absolute; top: 0; left: 50%; width: 1px; height: 5px; background: var(--muted); }
+  .pain-desc { margin-top: 6px; font-size: 14px; min-height: 40px; }
+  .pain-desc b { font-weight: 600; }
+  .guide { margin-top: 8px; }
+  .guide button { display: flex; gap: 12px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 10px; font-size: 14px; }
+  .guide button.on { background: var(--bg); }
+  .guide button b { min-width: 22px; }
   .total { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); min-height: 34px; }
 
   /* Exercises */
@@ -224,10 +232,12 @@
         <button id="painPlus" aria-label="More pain">+</button>
       </div>
       <input type="range" class="pain-range" id="painRange" min="0" max="50" step="1" aria-label="Pain from 0 to 50">
-      <div class="scale-ends"><span>0 · No pain</span><span>50 · Can't do anything or bear weight</span></div>
+      <div class="ticks" id="painTicks"></div>
+      <div class="pain-desc" id="painDesc"></div>
+      <div class="guide hidden" id="painGuide"></div>
       <div class="total">
         <span class="muted small" id="painCompare"></span>
-        <button class="icon-btn" id="painClear">Clear</button>
+        <span><button class="icon-btn" id="painGuideBtn">Scale guide</button><button class="icon-btn" id="painClear">Clear</button></span>
       </div>
     </div>
 
@@ -423,6 +433,15 @@ function prevPain(date) {
   const d = Object.keys(db.entries).filter(k => k < date && typeof db.entries[k].pain === 'number').sort().pop();
   return d ? { d, v: db.entries[d].pain } : null;
 }
+// What each 10 points on the pain scale means
+const PAIN_MARKERS = [
+  [0, 'No pain'],
+  [10, 'Walk outside below 10,000 steps without pain'],
+  [20, 'Walk around the flat with minimal pain'],
+  [30, 'Dull achy pain multiple times a day while staying inside. Sitting and sleeping hurt'],
+  [40, 'Sharp pain with every step. Sharp and dull achy pain all throughout the day'],
+  [50, "Can't do anything or put weight on it"],
+];
 const painLevel = v => v <= 15 ? 'better' : v <= 30 ? 'same' : 'worse';
 const signed = n => n > 0 ? `+${n}` : `${n}`;
 const clampInt = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(v)));
@@ -461,6 +480,13 @@ function renderToday() {
     $('painCompare').textContent = logged ? 'First pain score logged' : prev ? `Last logged: ${prev.v} on ${fmtShort(prev.d)}` : 'Drag the slider to log';
   }
 
+  const v = Number($('painRange').value);
+  const near = PAIN_MARKERS[Math.round(v / 10)];
+  $('painDesc').innerHTML = `<b>${v === near[0] ? near[0] : `Near ${near[0]}`}</b> · ${esc(near[1])}`;
+  $('painDesc').classList.toggle('muted', !logged);
+  $('painGuide').innerHTML = PAIN_MARKERS.map(([n, t]) =>
+    `<button data-pain="${n}" class="${logged && p === n ? 'on' : ''}"><b>${n}</b><span>${esc(t)}</span></button>`).join('');
+
   renderExercises();
 
   if (document.activeElement !== $('steps')) $('steps').value = e.steps ?? '';
@@ -481,6 +507,12 @@ function bumpPain(delta) {
 $('painRange').addEventListener('input', e => setPain(Number(e.target.value)));
 $('painPlus').onclick = () => bumpPain(1);
 $('painMinus').onclick = () => bumpPain(-1);
+$('painTicks').innerHTML = PAIN_MARKERS.map(([n]) => `<span style="left:${n * 2}%">${n}</span>`).join('');
+$('painGuideBtn').onclick = () => $('painGuide').classList.toggle('hidden');
+$('painGuide').addEventListener('click', e => {
+  const b = e.target.closest('[data-pain]');
+  if (b) setPain(Number(b.dataset.pain));
+});
 $('painClear').onclick = () => { setEntry(current, { pain: null }); renderToday(); };
 
 // ---------- Exercises ----------
