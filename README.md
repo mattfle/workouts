@@ -10,8 +10,10 @@ A simple workout tracker for iPhone. It's a web app you add to the Home Screen. 
 - Feel score from 1 (easy) to 5 (hard)
 - Aims kept as free text
 - Progress graph of weight, or reps/time, over time, plus an editable history
+- Opens on a start page with two sections: **Knee & legs** and **Arms**
+- Arms **Today**: step between days with ‹ › or tap the date for a calendar, so any past day can be logged
 - **Guitar**, logged in minutes (usual minutes prefilled when ticked)
-- **Reps per day** chart: stacked bars per exercise over a week to all time. Isometric holds count as 1 rep per 3 s; guitar as 1 rep per 2 min by default (editable on the Guitar page)
+- Arms **Progress** tab: stats, a **Reps per day** chart stacked by exercise (week to all time), a day-by-day log and backup. Isometric holds count as 1 rep per 3 s; guitar as 1 rep per 2 min
 - 5-week cycle tracker (Dynamic / ISO / Dynamic / ISO / Deload)
 - Export/Import of a JSON backup
 

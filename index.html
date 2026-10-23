@@ -206,6 +206,50 @@
   details summary { cursor: pointer; color: var(--accent); font-weight: 600; padding: 4px 0; list-style: none; }
   details summary::-webkit-details-marker { display: none; }
 
+  /* Start page */
+  .pick { padding: 18px 16px; margin-bottom: 12px; }
+
+  /* Day navigation (same layout as the knee page) */
+  .datenav { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 4px; }
+  .datenav > button { width: 44px; height: 44px; border-radius: 50%; font-size: 22px; background: var(--card); color: var(--accent); }
+  .datenav > button:disabled { opacity: .3; }
+  .datenav .label { width: auto; height: auto; background: none; color: var(--text); text-align: center; padding: 2px 10px; border-radius: 12px; font-size: 16px; }
+  .datenav .label strong { display: block; font-size: 20px; }
+  .datenav .label strong::after { content: ' ▾'; font-size: 13px; color: var(--muted); }
+
+  /* Calendar sheet */
+  .cal-backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / .4); z-index: 10; }
+  .cal-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; max-width: 560px; margin: 0 auto; background: var(--card); border-radius: 20px 20px 0 0; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .cal-head button { width: 40px; height: 40px; border-radius: 50%; font-size: 22px; background: var(--field); color: var(--accent); }
+  .cal-head button:disabled { opacity: .3; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 12px; }
+  .cal-grid .wd { text-align: center; font-size: 12px; color: var(--muted); padding: 4px 0; }
+  .cal-grid button { position: relative; aspect-ratio: 1; border-radius: 50%; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .cal-grid button:disabled { color: var(--muted); opacity: .4; }
+  .cal-grid button.today { box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .cal-grid button.sel { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+  .cal-grid button i { position: absolute; left: 50%; bottom: 12%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--accent); }
+  .cal-grid button.sel i { background: var(--on-accent); }
+  .cal-sheet .btn { background: var(--field); margin: 0; }
+
+  /* Bottom tabs (Today / Progress), as on the knee page */
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; justify-content: center; background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+  .tabbar .inner { display: flex; width: 100%; max-width: 560px; }
+  .tabbar a { flex: 1; padding: 10px 0 12px; text-align: center; text-decoration: none; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .tabbar a svg { display: block; margin: 0 auto 3px; width: 24px; height: 24px; }
+  .tabbar a.on { color: var(--accent); }
+  body.has-tabbar #app { padding-bottom: calc(env(safe-area-inset-bottom) + 90px); }
+
+  /* Progress */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 4px; }
+  .stat { background: var(--card); border-radius: 14px; padding: 12px; }
+  .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .log-item { display: block; width: 100%; text-align: left; padding: 11px 0; border-top: 1px solid var(--line); }
+  .log-item:first-child { border-top: 0; padding-top: 2px; }
+  .log-item .small { margin-top: 2px; }
+
   .switch { position: relative; width: 51px; height: 31px; flex: none; }
   .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; z-index: 1; }
   .switch span { position: absolute; inset: 0; border-radius: 31px; background: var(--line); transition: background .2s; }
@@ -217,6 +261,18 @@
 <body>
 <div id="app"></div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
+<div id="cal" hidden>
+  <div class="cal-backdrop" data-cal="close"></div>
+  <div class="cal-sheet">
+    <div class="cal-head">
+      <button data-cal="prev" aria-label="Previous month">‹</button>
+      <strong id="calTitle"></strong>
+      <button data-cal="next" id="calNext" aria-label="Next month">›</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <button class="btn" data-cal="today">Go to today</button>
+  </div>
+</div>
 
 <script>
 (() => {
@@ -230,6 +286,7 @@
   // Rep-equivalents for the reps chart: one rep ≈ 3 s under tension at a normal tempo,
   // so an isometric hold counts as secs / 3 reps. Guitar uses its own minutes-per-rep setting.
   const SECS_PER_REP = 3;
+  const GUITAR_MINS_PER_REP = 2;
   const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
   // ---------- helpers ----------
@@ -302,8 +359,8 @@
       if (sec.sets == null) sec.sets = 2;
       for (const h of sec.history) if (h.sets == null) h.sets = 2;
     }
-    // Guitar is logged in minutes and converted to rep-equivalents (default 2 min ≈ 1 rep).
-    if (!d.guitar) d.guitar = { minutes: 30, minsPerRep: 2, history: [] };
+    // Guitar is logged in minutes and converted to rep-equivalents (2 min ≈ 1 rep).
+    if (!d.guitar) d.guitar = { minutes: 30, history: [] };
     return d;
   }
   function save() {
@@ -314,15 +371,16 @@
   save();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
-  const ui = { tab: 'iso', metric: { iso: 'weight', dyn: 'weight' }, range: 30 };
+  // ui.day is the day being logged on the Arms page (today unless picked otherwise)
+  const ui = { tab: 'iso', metric: { iso: 'weight', dyn: 'weight' }, range: 30, day: todayStr() };
   try { const r = localStorage.getItem(KEY + '.range'); if (r !== null) ui.range = Number(r); } catch (e) { /* default range */ }
 
   // ---------- domain logic ----------
   const findEx = id => state.exercises.find(e => e.id === id);
-  const todayEntry = sec => sec.history.find(h => h.date === todayStr());
+  const dayEntry = sec => sec.history.find(h => h.date === ui.day);
 
   function toggleDone(ex, kind) {
-    const sec = ex[kind], amt = KINDS[kind].amount, t = todayStr();
+    const sec = ex[kind], amt = KINDS[kind].amount, t = ui.day;
     const i = sec.history.findIndex(h => h.date === t);
     if (i >= 0) {
       sec.history.splice(i, 1);
@@ -340,7 +398,7 @@
     const sec = ex[kind], amt = KINDS[kind].amount;
     if (sec[field] === value) return;
     sec[field] = value;
-    const t = todayEntry(sec);
+    const t = dayEntry(sec);
     if (t) {
       Object.assign(t, { weight: sec.weight, unit: sec.unit, sets: sec.sets, [amt]: sec[amt] });
       sec.timesDone = 1;
@@ -349,18 +407,18 @@
     }
   }
 
-  const guitarToday = () => state.guitar.history.find(h => h.date === todayStr());
-  const guitarReps = mins => Math.round(mins / (state.guitar.minsPerRep || 2) * 10) / 10;
+  const guitarDay = () => state.guitar.history.find(h => h.date === ui.day);
+  const guitarReps = mins => Math.round(mins / GUITAR_MINS_PER_REP * 10) / 10;
   function toggleGuitar() {
-    const g = state.guitar, t = todayStr();
-    if (guitarToday()) g.history = g.history.filter(h => h.date !== t);
+    const g = state.guitar, t = ui.day;
+    if (guitarDay()) g.history = g.history.filter(h => h.date !== t);
     else { g.history.push({ date: t, minutes: g.minutes }); g.history.sort((a, b) => a.date.localeCompare(b.date)); }
   }
 
   function setFeel(ex, kind, v) {
     const sec = ex[kind];
     sec.feel = sec.feel === v ? null : v;
-    const t = todayEntry(sec);
+    const t = dayEntry(sec);
     if (t) t.feel = sec.feel;
   }
 
@@ -387,8 +445,43 @@
     return `${pain} · ${exDone ? `${exDone} exercise${exDone === 1 ? '' : 's'} done ✓` : 'no exercises yet today'}`;
   }
 
-  function renderHome() {
-    const d = new Date();
+  const fmtLong = s => dateOf(s).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  const shiftDay = (s, n) => { const d = dateOf(s); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const dayName = s => { const diff = Math.round((dateOf(todayStr()) - dateOf(s)) / 864e5); return diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : fmtDate(s); };
+  const backLink = (href, label) => `<div class="topbar"><a class="back" href="${href}"><span>‹</span>${label}</a></div>`;
+  const ICON_CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>';
+  const ICON_CHART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 9l4 4 3-3 5 6"/></svg>';
+  const tabbar = active => `<nav class="tabbar"><div class="inner">
+      <a href="#/arms" class="${active === 'today' ? 'on' : ''}">${ICON_CAL}Today</a>
+      <a href="#/arms/progress" class="${active === 'progress' ? 'on' : ''}">${ICON_CHART}Progress</a>
+    </div></nav>`;
+
+  function armsSummary() {
+    const t = todayStr();
+    const done = state.exercises.filter(ex => ex.iso.history.some(h => h.date === t) || ex.dyn.history.some(h => h.date === t)).length
+      + (state.guitar.history.some(h => h.date === t) ? 1 : 0);
+    const cur = state.cycle.find(w => !w.done);
+    return `${cur ? `This week: ${esc(cur.focus)}` : 'Cycle complete'} · ${done ? `${done} done today ✓` : 'nothing yet today'}`;
+  }
+
+  function renderChooser() {
+    app.innerHTML = `
+      <h1>Workouts</h1>
+      <p class="sub">${fmtLong(todayStr())}</p>
+      <a class="card ex-head pick" href="knee/">
+        <span class="grow"><span class="ex-name">Knee & legs</span><br>
+          <span class="small muted">${kneeSummary()}</span></span>
+        <span class="chev">›</span>
+      </a>
+      <a class="card ex-head pick" href="#/arms">
+        <span class="grow"><span class="ex-name">Arms</span><br>
+          <span class="small muted">${armsSummary()}</span></span>
+        <span class="chev">›</span>
+      </a>`;
+  }
+
+  function renderArms() {
+    const day = ui.day;
     const current = state.cycle.findIndex(w => !w.done);
     const weeks = state.cycle.map((w, i) => `
       <button class="week${w.done ? ' done' : ''}${i === current ? ' current' : ''}" data-act="week" data-i="${i}"
@@ -412,20 +505,17 @@
             <span class="grow cfg">${cfgText(ex, kind)}</span>
             <span class="count">×${ex[kind].timesDone}</span>
             <button class="check" data-act="tick" data-id="${ex.id}" data-kind="${kind}"
-              aria-pressed="${!!todayEntry(ex[kind])}" aria-label="${KINDS[kind].label} done today">${CHECK_SVG}</button>
+              aria-pressed="${!!dayEntry(ex[kind])}" aria-label="${KINDS[kind].label} done ${dayName(day)}">${CHECK_SVG}</button>
           </div>`).join('')}
       </div>`).join('');
 
     app.innerHTML = `
-      <h1>Workouts</h1>
-      <p class="sub">${d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-
-      <h2>Knee</h2>
-      <a class="card ex-head" href="knee/" style="margin-bottom:12px">
-        <span class="grow"><span class="ex-name">Knee progress</span><br>
-          <span class="small muted">${kneeSummary()}</span></span>
-        <span class="chev">›</span>
-      </a>
+      ${backLink('#/', 'Workouts')}
+      <div class="datenav">
+        <button data-act="day" data-d="-1" aria-label="Previous day">‹</button>
+        <button class="label" data-act="cal" aria-label="Pick a date"><strong>${dayName(day)}</strong><span class="small muted">${fmtLong(day)}</span></button>
+        <button data-act="day" data-d="1" aria-label="Next day" ${day >= todayStr() ? 'disabled' : ''}>›</button>
+      </div>
 
       <h2>Cycle</h2>
       <div class="card">
@@ -443,23 +533,51 @@
         </a>
         <div class="line">
           <span class="tag">MIN</span>
-          <span class="grow cfg">${fmtNum(state.guitar.minutes)} min · ≈ ${fmtNum(guitarReps(state.guitar.minutes))} reps</span>
+          <span class="grow cfg">${fmtNum(guitarDay()?.minutes ?? state.guitar.minutes)} min · ≈ ${fmtNum(guitarReps(guitarDay()?.minutes ?? state.guitar.minutes))} reps</span>
           <span class="count">×${state.guitar.history.length}</span>
-          <button class="check" data-act="tick-guitar" aria-pressed="${!!guitarToday()}" aria-label="Guitar done today">${CHECK_SVG}</button>
+          <button class="check" data-act="tick-guitar" aria-pressed="${!!guitarDay()}" aria-label="Guitar done ${dayName(day)}">${CHECK_SVG}</button>
         </div>
       </div>
       <button class="btn" data-act="add">+ Add exercise</button>
+      ${tabbar('today')}
+    `;
+  }
+
+  function renderArmsProgress() {
+    const days = volumeDays();
+    const active = days.filter(d => d.segs.length).length;
+    const total = Math.round(days.reduce((a, d) => a + d.total, 0));
+    const gMin = state.guitar.history.filter(h => h.date >= days[0].date).reduce((a, h) => a + (h.minutes || 0), 0);
+    const log = armDates().sort().reverse().slice(0, 60).map(date => {
+      const segs = daySegs(date), tot = segs.reduce((a, x) => a + x.reps, 0);
+      return `<button class="log-item" data-act="goto" data-date="${date}">
+        <div class="row"><b class="grow">${fmtLong(date)}</b><span class="count">≈ ${fmtNum(Math.round(tot))} reps</span></div>
+        <div class="small muted">${segs.map(sg => `${esc(sg.name)} ${sg.detail}`).join(' · ')}</div>
+      </button>`;
+    }).join('');
+
+    app.innerHTML = `
+      ${backLink('#/', 'Workouts')}
+      <h1>Progress</h1>
+      <div class="seg vol-range" style="margin-top:12px">
+        ${[[7, 'Week'], [14, '2 wks'], [30, 'Month'], [90, '3 mo'], [0, 'All']].map(([r, l]) =>
+          `<button data-act="range" data-r="${r}" aria-pressed="${ui.range === r}">${l}</button>`).join('')}
+      </div>
+      <div class="stats">
+        <div class="stat"><b>${active}</b><span>Active days</span></div>
+        <div class="stat"><b>${total.toLocaleString()}</b><span>Reps ≈</span></div>
+        <div class="stat"><b>${gMin ? fmtNum(gMin) : '–'}</b><span>Guitar min</span></div>
+      </div>
 
       <h2>Reps per day</h2>
       <div class="card">
-        <div class="seg vol-range">
-          ${[[7, 'Week'], [14, '2 wks'], [30, 'Month'], [90, '3 mo'], [0, 'All']].map(([r, l]) =>
-            `<button data-act="range" data-r="${r}" aria-pressed="${ui.range === r}">${l}</button>`).join('')}
-        </div>
         <div class="chart" id="volChart"></div>
         <div class="legend" id="volLegend"></div>
-        <p class="small muted" style="margin:10px 0 0">Isometric holds count as 1 rep per ${SECS_PER_REP} s held. Guitar counts as 1 rep per ${fmtNum(state.guitar.minsPerRep)} min (change it on the Guitar page).</p>
+        <p class="small muted" style="margin:10px 0 0">Isometric holds count as 1 rep per ${SECS_PER_REP} s held. Guitar counts as 1 rep per ${GUITAR_MINS_PER_REP} min.</p>
       </div>
+
+      <h2>Log</h2>
+      <div class="card">${log || '<p class="small muted" style="margin:0">Nothing logged yet.</p>'}</div>
 
       <h2>Backup</h2>
       <div class="btn-row">
@@ -467,12 +585,13 @@
         <button class="btn" data-act="import">Import</button>
       </div>
       <p class="small muted" style="margin:0 4px">Everything is saved on this phone only. Export now and then to keep a copy.</p>
+      ${tabbar('progress')}
     `;
     drawVolume(document.getElementById('volChart'));
   }
 
   function renderGuitar() {
-    const g = state.guitar, t = guitarToday();
+    const g = state.guitar, t = guitarDay(), isToday = ui.day === todayStr();
     const hist = g.history.slice().reverse().map(h => `
       <div class="hist-row">
         <span class="d">${fmtDate(h.date)}</span>
@@ -480,16 +599,16 @@
         <button class="x" data-act="g-del" data-date="${h.date}" aria-label="Delete entry from ${fmtDate(h.date)}">×</button>
       </div>`).join('');
     app.innerHTML = `
-      <div class="topbar"><a class="back" href="#/"><span>‹</span>Workouts</a></div>
+      ${backLink('#/arms', 'Arms')}
       <h1>Guitar</h1>
 
-      <h2>Today</h2>
+      <h2>${isToday ? 'Today' : fmtLong(ui.day)}</h2>
       <div class="card">
         <button class="done-btn" data-act="tick-guitar" aria-pressed="${!!t}">
-          ${CHECK_SVG}<span>${t ? 'Done today' : 'Mark done today'}</span>
+          ${CHECK_SVG}<span>${t ? 'Done' : 'Mark done'}${isToday ? ' today' : ''}</span>
         </button>
         ${t ? `<div class="times">
-          <div><div>Minutes today</div><div class="small muted">≈ ${fmtNum(guitarReps(t.minutes))} reps</div></div>
+          <div><div>Minutes</div><div class="small muted">≈ ${fmtNum(guitarReps(t.minutes))} reps</div></div>
           <div class="stepper">
             <button class="step" data-act="g-min" data-d="-5" aria-label="5 minutes less">−</button>
             <span class="times-num">${fmtNum(t.minutes)}</span>
@@ -504,12 +623,7 @@
           <label for="g-minutes">Usual minutes<div class="small muted">Prefilled when you tick it off</div></label>
           <input id="g-minutes" inputmode="numeric" value="${fmtNum(g.minutes)}">
         </div>
-        <div class="field">
-          <label for="g-ratio">Minutes per rep<div class="small muted">30 min ≈ ${fmtNum(guitarReps(30))} reps</div></label>
-          <input id="g-ratio" inputmode="decimal" value="${fmtNum(g.minsPerRep)}">
-        </div>
       </div>
-      <p class="small muted" style="margin:0 4px">Fretting is a light, on-and-off grip held for a long time, so it counts for much less per minute than a weighted hold. Each isometric rep is a ${SECS_PER_REP} s hold under load. At the default 2 min per rep, a 30 min session counts about the same as one exercise.</p>
 
       ${g.history.length ? `<h2>History</h2><div class="card"><details class="hist" open><summary>${g.history.length} session${g.history.length === 1 ? '' : 's'}</summary>${hist}</details></div>` : ''}
     `;
@@ -517,7 +631,7 @@
 
   function renderExercise(ex) {
     const kind = ui.tab, k = KINDS[kind], sec = ex[kind];
-    const done = !!todayEntry(sec);
+    const done = !!dayEntry(sec);
     const metric = ui.metric[kind];
 
     const hist = sec.history.slice().reverse().map(h => `
@@ -528,17 +642,17 @@
       </div>`).join('');
 
     app.innerHTML = `
-      <div class="topbar"><a class="back" href="#/"><span>‹</span>Workouts</a></div>
+      ${backLink('#/arms', 'Arms')}
       <h1>${esc(ex.name)}</h1>
 
       <div class="seg tabs" role="tablist">
-        ${['iso', 'dyn'].map(kk => `<button data-act="tab" data-kind="${kk}" aria-pressed="${kk === kind}">${KINDS[kk].label}${todayEntry(ex[kk]) ? '<span class="dot" aria-label="done today"></span>' : ''}</button>`).join('')}
+        ${['iso', 'dyn'].map(kk => `<button data-act="tab" data-kind="${kk}" aria-pressed="${kk === kind}">${KINDS[kk].label}${dayEntry(ex[kk]) ? '<span class="dot" aria-label="done today"></span>' : ''}</button>`).join('')}
       </div>
 
-      <h2>Today</h2>
+      <h2>${ui.day === todayStr() ? 'Today' : fmtLong(ui.day)}</h2>
       <div class="card">
         <button class="done-btn" data-act="tick" data-id="${ex.id}" data-kind="${kind}" aria-pressed="${done}">
-          ${CHECK_SVG}<span>${done ? 'Done today' : 'Mark done today'}</span>
+          ${CHECK_SVG}<span>${done ? 'Done' : 'Mark done'}${ui.day === todayStr() ? ' today' : ''}</span>
         </button>
         <div class="times">
           <div>
@@ -699,27 +813,32 @@
 
   // Stacked bars of rep-equivalents per day, one colour per exercise (guitar always last, slot 8).
   const exColor = i => `var(--s${i % 7 + 1})`;
+  function daySegs(date) {
+    const segs = [];
+    state.exercises.forEach((ex, i) => {
+      const iso = ex.iso.history.find(h => h.date === date), dyn = ex.dyn.history.find(h => h.date === date);
+      const reps = (iso ? (iso.sets || 0) * (iso.secs || 0) / SECS_PER_REP : 0) + (dyn ? (dyn.sets || 0) * (dyn.reps || 0) : 0);
+      if (!iso && !dyn) return;
+      const parts = [iso && `ISO ${fmtNum(iso.sets)}×${fmtNum(iso.secs)}s`, dyn && `DYN ${fmtNum(dyn.sets)}×${fmtNum(dyn.reps)}`].filter(Boolean);
+      segs.push({ name: ex.name, color: exColor(i), reps, detail: parts.join(' + ') });
+    });
+    const g = state.guitar.history.find(h => h.date === date);
+    if (g && g.minutes) segs.push({ name: 'Guitar', color: 'var(--s8)', reps: guitarReps(g.minutes), detail: `${fmtNum(g.minutes)} min` });
+    return segs;
+  }
+  const armDates = () => [...new Set(state.exercises.flatMap(ex => [...ex.iso.history, ...ex.dyn.history])
+    .concat(state.guitar.history).map(h => h.date))];
   function volumeDays() {
     const t = todayStr();
-    const shift = (s, n) => { const d = dateOf(s); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-    let start = ui.range ? shift(t, -(ui.range - 1)) : null;
+    let start = ui.range ? shiftDay(t, -(ui.range - 1)) : null;
     if (!start) {
-      const all = state.exercises.flatMap(ex => [...ex.iso.history, ...ex.dyn.history]).concat(state.guitar.history).map(h => h.date).sort();
-      start = all[0] && all[0] < shift(t, -6) ? all[0] : shift(t, -6);
+      const first = armDates().sort()[0];
+      start = first && first < shiftDay(t, -6) ? first : shiftDay(t, -6);
     }
     const days = [];
-    for (let d = start; d <= t; d = shift(d, 1)) days.push(d);
+    for (let d = start; d <= t; d = shiftDay(d, 1)) days.push(d);
     return days.map(date => {
-      const segs = [];
-      state.exercises.forEach((ex, i) => {
-        const iso = ex.iso.history.find(h => h.date === date), dyn = ex.dyn.history.find(h => h.date === date);
-        const reps = (iso ? (iso.sets || 0) * (iso.secs || 0) / SECS_PER_REP : 0) + (dyn ? (dyn.sets || 0) * (dyn.reps || 0) : 0);
-        if (!reps) return;
-        const parts = [iso && `ISO ${fmtNum(iso.sets)}×${fmtNum(iso.secs)}s`, dyn && `DYN ${fmtNum(dyn.sets)}×${fmtNum(dyn.reps)}`].filter(Boolean);
-        segs.push({ name: ex.name, color: exColor(i), reps, detail: parts.join(' + ') });
-      });
-      const g = state.guitar.history.find(h => h.date === date);
-      if (g && g.minutes) segs.push({ name: 'Guitar', color: 'var(--s8)', reps: guitarReps(g.minutes), detail: `${fmtNum(g.minutes)} min` });
+      const segs = daySegs(date).filter(sg => sg.reps > 0);
       return { date, segs, total: segs.reduce((a, x) => a + x.reps, 0) };
     });
   }
@@ -787,6 +906,33 @@
     hideTip = hide;
   }
 
+  const cal = document.getElementById('cal');
+  let calMonth; // YYYY-MM-01 of the month on show
+  function renderCal() {
+    const first = dateOf(calMonth), t = todayStr(), logged = new Set(armDates());
+    document.getElementById('calTitle').textContent = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    document.getElementById('calNext').disabled = calMonth >= t.slice(0, 8) + '01';
+    const lead = (first.getDay() + 6) % 7; // weeks start on Monday
+    const dim = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+    const wds = [...Array(7)].map((_, i) => `<div class="wd">${new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'narrow' })}</div>`).join('');
+    const cells = [...Array(lead)].map(() => '<div></div>').join('') + [...Array(dim)].map((_, i) => {
+      const d = calMonth.slice(0, 8) + pad(i + 1);
+      return `<button data-day="${d}" class="${d === ui.day ? 'sel' : ''}${d === t ? ' today' : ''}" ${d > t ? 'disabled' : ''}>${i + 1}${logged.has(d) ? '<i></i>' : ''}</button>`;
+    }).join('');
+    document.getElementById('calGrid').innerHTML = wds + cells;
+  }
+  function openCal() { calMonth = ui.day.slice(0, 8) + '01'; renderCal(); cal.hidden = false; }
+  function pickDay(d) { cal.hidden = true; ui.day = d; render(); }
+  cal.addEventListener('click', e => {
+    const b = e.target.closest('[data-cal], [data-day]');
+    if (!b || b.disabled) return;
+    if (b.dataset.day) return pickDay(b.dataset.day);
+    const act = b.dataset.cal;
+    if (act === 'close') cal.hidden = true;
+    else if (act === 'today') pickDay(todayStr());
+    else { const d = dateOf(calMonth); d.setMonth(d.getMonth() + (act === 'next' ? 1 : -1)); calMonth = shiftDay(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`, 0); renderCal(); }
+  });
+
   let hideTip = null;
   document.addEventListener('pointerdown', e => { if (hideTip && !e.target.closest('.chart')) hideTip(); });
 
@@ -796,16 +942,21 @@
     return m ? findEx(m[1]) : null;
   }
   let lastRoute = null;
-  const isGuitar = () => location.hash === '#/guitar';
+  // Routes: start page (#/), Arms today (#/arms), Arms progress (#/arms/progress), #/ex/<id>, #/guitar
   function render() {
-    const ex = currentEx();
-    const route = ex ? ex.id : isGuitar() ? 'guitar' : 'home';
+    const ex = currentEx(), h = location.hash;
+    const route = ex ? ex.id : h;
     if (route !== lastRoute) {
       if (ex) ui.tab = 'iso';
       window.scrollTo(0, 0);
       lastRoute = route;
     }
-    if (ex) renderExercise(ex); else if (isGuitar()) renderGuitar(); else renderHome();
+    document.body.classList.toggle('has-tabbar', h === '#/arms' || h === '#/arms/progress');
+    if (ex) renderExercise(ex);
+    else if (h === '#/guitar') renderGuitar();
+    else if (h === '#/arms') renderArms();
+    else if (h === '#/arms/progress') renderArmsProgress();
+    else renderChooser();
   }
   function commit() { save(); render(); }
 
@@ -819,7 +970,10 @@
     switch (act) {
       case 'tick': toggleDone(ex, b.dataset.kind); break;
       case 'tick-guitar': toggleGuitar(); break;
-      case 'g-min': { const t = guitarToday(); if (t) t.minutes = Math.max(5, (t.minutes || 0) + +b.dataset.d); break; }
+      case 'day': { const d = shiftDay(ui.day, +b.dataset.d); if (d <= todayStr()) ui.day = d; return render(); }
+      case 'cal': return openCal();
+      case 'goto': ui.day = b.dataset.date; location.hash = '#/arms'; return;
+      case 'g-min': { const t = guitarDay(); if (t) t.minutes = Math.max(5, (t.minutes || 0) + +b.dataset.d); break; }
       case 'g-del':
         if (!confirm(`Delete the guitar session from ${fmtDate(b.dataset.date)}?`)) return;
         state.guitar.history = state.guitar.history.filter(h => h.date !== b.dataset.date);
@@ -845,7 +999,7 @@
       case 'delete-ex':
         if (!confirm(`Delete ${ex.name} and all its history?`)) return;
         state.exercises = state.exercises.filter(x => x !== ex);
-        save(); location.hash = '#/'; return;
+        save(); location.hash = '#/arms'; return;
       case 'add': {
         const name = (prompt('Exercise name') || '').trim();
         if (!name) return;
@@ -866,9 +1020,9 @@
 
   app.addEventListener('change', e => {
     const t = e.target, ex = currentEx();
-    if (t.id === 'g-minutes' || t.id === 'g-ratio') {
+    if (t.id === 'g-minutes') {
       const v = parseNum(t.value);
-      if (v != null && v > 0) state.guitar[t.id === 'g-minutes' ? 'minutes' : 'minsPerRep'] = v;
+      if (v != null && v > 0) state.guitar.minutes = v;
       return commit();
     }
     if (!ex) return;
@@ -913,7 +1067,7 @@
       const d = JSON.parse(await f.text());
       if (!d || !Array.isArray(d.exercises) || !Array.isArray(d.cycle)) throw new Error('bad file');
       if (!confirm('Replace all current data with this backup?')) return;
-      state = migrate(d); save(); location.hash = '#/'; render();
+      state = migrate(d); save(); location.hash = '#/arms'; render();
     } catch (err) {
       alert('That file doesn’t look like a workouts backup.');
     }
@@ -925,7 +1079,10 @@
   // Re-render when the app comes back to the foreground on a new day, so "today" ticks reset.
   let shownDay = todayStr();
   function checkNewDay() {
-    if (!document.hidden && todayStr() !== shownDay) { shownDay = todayStr(); render(); }
+    if (!document.hidden && todayStr() !== shownDay) {
+      if (ui.day === shownDay) ui.day = todayStr(); // follow "today" overnight unless another day was picked
+      shownDay = todayStr(); render();
+    }
   }
   document.addEventListener('visibilitychange', checkNewDay);
   window.addEventListener('pageshow', checkNewDay);
