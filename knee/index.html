@@ -169,7 +169,7 @@
 
   /* Charts */
   .range { display: flex; gap: 6px; margin-bottom: 10px; }
-  .range button { padding: 6px 12px; border-radius: 20px; background: var(--card); border: 1px solid var(--line); font-size: 14px; }
+  .range button { flex: 1; white-space: nowrap; padding: 6px 4px; border-radius: 20px; background: var(--card); border: 1px solid var(--line); font-size: 14px; }
   .range button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
   svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
   svg.chart text { fill: var(--muted); font-size: 10px; }
@@ -260,6 +260,7 @@
   <section id="view-progress" class="hidden">
     <h1>Progress</h1>
     <div class="range" id="range">
+      <button data-r="7">Week</button>
       <button data-r="14">2 weeks</button>
       <button data-r="30">Month</button>
       <button data-r="90">3 months</button>
