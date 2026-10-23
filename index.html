@@ -160,6 +160,7 @@
   .feel { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
   .feel button { padding: 10px 0; border-radius: 10px; background: var(--field); font-weight: 600; font-size: 17px; }
   .feel button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+  .feel button:disabled { opacity: .4; }
   .feel-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
 
   .field { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
@@ -385,7 +386,7 @@
     if (i >= 0) {
       sec.history.splice(i, 1);
     } else {
-      sec.history.push({ date: t, weight: sec.weight, unit: sec.unit, sets: sec.sets, [amt]: sec[amt], feel: sec.feel, setting: sec.setting });
+      sec.history.push({ date: t, weight: sec.weight, unit: sec.unit, sets: sec.sets, [amt]: sec[amt], feel: null, setting: sec.setting });
       sec.history.sort((a, b) => a.date.localeCompare(b.date));
     }
   }
@@ -445,11 +446,10 @@
     else { g.history.push({ date: t, minutes: g.minutes }); g.history.sort((a, b) => a.date.localeCompare(b.date)); }
   }
 
+  // Feel is stored on that day's session only (tap the same score again to clear it)
   function setFeel(ex, kind, v) {
-    const sec = ex[kind];
-    sec.feel = sec.feel === v ? null : v;
-    const t = dayEntry(sec);
-    if (t) t.feel = sec.feel;
+    const t = dayEntry(ex[kind]);
+    if (t) t.feel = t.feel === v ? null : v;
   }
 
   // ---------- views ----------
@@ -671,6 +671,7 @@
   function renderExercise(ex) {
     const kind = ui.tab, k = KINDS[kind], sec = ex[kind];
     const done = !!dayEntry(sec);
+    const feel = dayEntry(sec)?.feel ?? null;
     const metric = ui.metric[kind];
 
     const hist = sec.history.slice().reverse().map(h => `
@@ -700,9 +701,9 @@
           </div>
           <span class="times-num">${timesOn(ex, kind)}</span>
         </div>
-        <div style="margin-top:16px">Feel${sec.feel ? ` <span class="muted">· ${feelWord(sec.feel)}</span>` : ''}</div>
+        <div style="margin-top:16px">Feel${feel ? ` <span class="muted">· ${feelWord(feel)}</span>` : done ? '' : ' <span class="muted small">· tick done to rate this day</span>'}</div>
         <div class="feel">
-          ${[1, 2, 3, 4, 5].map(v => `<button data-act="feel" data-v="${v}" aria-pressed="${sec.feel === v}">${v}</button>`).join('')}
+          ${[1, 2, 3, 4, 5].map(v => `<button data-act="feel" data-v="${v}" aria-pressed="${feel === v}" ${done ? '' : 'disabled'}>${v}</button>`).join('')}
         </div>
         <div class="feel-scale"><span>Easy</span><span>Hard</span></div>
       </div>
@@ -728,8 +729,10 @@
           <input id="f-amount" inputmode="decimal" value="${sec[k.amount] ?? ''}" data-field="${k.amount}">
         </div>
         <div class="field">
-          <label for="f-setting">Machine setting</label>
-          <input id="f-setting" class="wide" value="${esc(sec.setting)}" placeholder="e.g. OUT" data-field="setting" autocapitalize="characters">
+          <label>Machine setting${sec.setting && !['IN', 'OUT'].includes(sec.setting) ? `<div class="small muted">Currently “${esc(sec.setting)}”</div>` : ''}</label>
+          <div class="seg">
+            ${['IN', 'OUT'].map(v => `<button data-act="setting" data-v="${v}" aria-pressed="${sec.setting === v}">${v}</button>`).join('')}
+          </div>
         </div>
       </div>
 
@@ -1039,6 +1042,7 @@
       case 'metric': ui.metric[ui.tab] = b.dataset.m; return render();
       case 'feel': setFeel(ex, ui.tab, +b.dataset.v); break;
       case 'unit': setConfig(ex, ui.tab, 'unit', b.dataset.u); break;
+      case 'setting': setConfig(ex, ui.tab, 'setting', ex[ui.tab].setting === b.dataset.v ? '' : b.dataset.v); break;
       case 'del-hist': {
         if (!confirm(`Delete the entry from ${fmtDate(b.dataset.date)}?`)) return;
         const sec = ex[ui.tab];
@@ -1084,7 +1088,6 @@
     if (t.id === 'f-assisted') { ex.assisted = t.checked; return commit(); }
     const field = t.dataset.field;
     if (!field) return;
-    if (field === 'setting') { setConfig(ex, ui.tab, 'setting', t.value.trim()); return commit(); }
     setConfig(ex, ui.tab, field, parseNum(t.value));
     commit();
   });

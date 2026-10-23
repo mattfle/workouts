@@ -4,10 +4,10 @@ A simple workout tracker for iPhone. It's a web app you add to the Home Screen. 
 
 ## Features
 - 4 exercises (you can add more), each with separate **Isometric** and **Dynamic** progressions
-- Weight (kg/lbs), sets, reps or hold time, and the machine setting (OUT / IN / plugged in…)
+- Weight (kg/lbs), sets, reps or hold time, and the machine setting (IN / OUT)
 - **Done** tick logs the session for the selected day. Untick to undo.
 - **Times done** is worked out per day: how many sessions in a row used the exact same weight, unit, sets, reps/time and machine setting. Changing any of them starts again at ×1; earlier days keep their own setup and count
-- Feel score from 1 (easy) to 5 (hard)
+- Feel score from 1 (easy) to 5 (hard), saved for each day's session
 - Aims kept as free text
 - Progress graph of weight, or reps/time, over time, plus an editable history
 - Opens on a start page with two sections: **Knee & legs** and **Arms**
