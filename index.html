@@ -357,6 +357,7 @@
       const sec = ex[kind];
       if (sec.sets == null) sec.sets = 2;
       for (const h of sec.history) if (h.sets == null) h.sets = 2;
+      sec.history.sort((a, b) => a.date.localeCompare(b.date)); // times-done runs rely on date order
     }
     // Guitar is logged in minutes and scored at a fixed 50 points per 30 min.
     if (!d.guitar) d.guitar = { minutes: 30, history: [] };
@@ -383,27 +384,36 @@
     const i = sec.history.findIndex(h => h.date === t);
     if (i >= 0) {
       sec.history.splice(i, 1);
-      sec.timesDone = Math.max(0, sec.timesDone - 1);
     } else {
       sec.history.push({ date: t, weight: sec.weight, unit: sec.unit, sets: sec.sets, [amt]: sec[amt], feel: sec.feel, setting: sec.setting });
       sec.history.sort((a, b) => a.date.localeCompare(b.date));
-      sec.timesDone += 1;
     }
   }
 
-  // Weight, unit and reps/time make up the "configuration".
-  // Changing it resets the counter (to 1 if today's session is already ticked).
+  // Weight, unit, sets, reps/time and machine setting make up a "configuration".
+  const cfgKey = (kind, r) => [r.weight, r.unit, r.sets, r[KINDS[kind].amount], (r.setting || '').trim().toUpperCase()].join('|');
+  // Setup shown for the selected day: what was logged that day, otherwise the current setup.
+  const shownCfg = (ex, kind) => dayEntry(ex[kind]) || ex[kind];
+  // Times done = sessions in a row with the same configuration, up to the selected day.
+  // On a day not ticked yet it's the run so far, if the last session matches the current setup.
+  function timesOn(ex, kind) {
+    const sec = ex[kind], hist = sec.history.filter(h => h.date <= ui.day);
+    if (!hist.length) return 0;
+    const last = hist[hist.length - 1];
+    const key = cfgKey(kind, last.date === ui.day ? last : sec);
+    let n = 0;
+    for (let i = hist.length - 1; i >= 0 && cfgKey(kind, hist[i]) === key; i--) n++;
+    return n;
+  }
+
+  // Changing the setup also updates the selected day's session if it's ticked;
+  // the times-done count follows from the history (see timesOn).
   function setConfig(ex, kind, field, value) {
     const sec = ex[kind], amt = KINDS[kind].amount;
     if (sec[field] === value) return;
     sec[field] = value;
     const t = dayEntry(sec);
-    if (t) {
-      Object.assign(t, { weight: sec.weight, unit: sec.unit, sets: sec.sets, [amt]: sec[amt] });
-      sec.timesDone = 1;
-    } else {
-      sec.timesDone = 0;
-    }
+    if (t) Object.assign(t, { weight: sec.weight, unit: sec.unit, sets: sec.sets, [amt]: sec[amt], setting: sec.setting });
   }
 
   const guitarDay = () => state.guitar.history.find(h => h.date === ui.day);
@@ -446,7 +456,7 @@
   const app = document.getElementById('app');
 
   function cfgText(ex, kind) {
-    const sec = ex[kind], k = KINDS[kind];
+    const sec = shownCfg(ex, kind), k = KINDS[kind];
     const parts = [`${fmtNum(sec.weight)} ${sec.unit}${ex.assisted ? ' assist' : ''}`, setsText(k, sec)];
     if (sec.setting) parts.push(esc(sec.setting));
     return parts.join(' · ');
@@ -523,7 +533,7 @@
           <div class="line">
             <span class="tag">${KINDS[kind].tag}</span>
             <span class="grow cfg">${cfgText(ex, kind)}</span>
-            <span class="count">×${ex[kind].timesDone}</span>
+            <span class="count">×${timesOn(ex, kind)}</span>
             <button class="check" data-act="tick" data-id="${ex.id}" data-kind="${kind}"
               aria-pressed="${!!dayEntry(ex[kind])}" aria-label="${KINDS[kind].label} done ${dayName(day)}">${CHECK_SVG}</button>
           </div>`).join('')}
@@ -685,14 +695,10 @@
         </button>
         <div class="times">
           <div>
-            <div>Times done</div>
-            <div class="small muted">at ${fmtNum(sec.weight)} ${sec.unit} · ${setsText(k, sec)}</div>
+            <div>Times done in a row</div>
+            <div class="small muted">at ${fmtNum(shownCfg(ex, kind).weight)} ${shownCfg(ex, kind).unit} · ${setsText(k, shownCfg(ex, kind))}${shownCfg(ex, kind).setting ? ` · ${esc(shownCfg(ex, kind).setting)}` : ''}</div>
           </div>
-          <div class="stepper">
-            <button class="step" data-act="times" data-d="-1" aria-label="Decrease">−</button>
-            <span class="times-num">${sec.timesDone}</span>
-            <button class="step" data-act="times" data-d="1" aria-label="Increase">+</button>
-          </div>
+          <span class="times-num">${timesOn(ex, kind)}</span>
         </div>
         <div style="margin-top:16px">Feel${sec.feel ? ` <span class="muted">· ${feelWord(sec.feel)}</span>` : ''}</div>
         <div class="feel">
@@ -1033,12 +1039,10 @@
       case 'metric': ui.metric[ui.tab] = b.dataset.m; return render();
       case 'feel': setFeel(ex, ui.tab, +b.dataset.v); break;
       case 'unit': setConfig(ex, ui.tab, 'unit', b.dataset.u); break;
-      case 'times': ex[ui.tab].timesDone = Math.max(0, ex[ui.tab].timesDone + +b.dataset.d); break;
       case 'del-hist': {
         if (!confirm(`Delete the entry from ${fmtDate(b.dataset.date)}?`)) return;
         const sec = ex[ui.tab];
         sec.history = sec.history.filter(h => h.date !== b.dataset.date);
-        if (b.dataset.date === todayStr()) sec.timesDone = Math.max(0, sec.timesDone - 1);
         break;
       }
       case 'delete-ex':
@@ -1080,7 +1084,7 @@
     if (t.id === 'f-assisted') { ex.assisted = t.checked; return commit(); }
     const field = t.dataset.field;
     if (!field) return;
-    if (field === 'setting') { ex[ui.tab].setting = t.value.trim(); return commit(); }
+    if (field === 'setting') { setConfig(ex, ui.tab, 'setting', t.value.trim()); return commit(); }
     setConfig(ex, ui.tab, field, parseNum(t.value));
     commit();
   });
