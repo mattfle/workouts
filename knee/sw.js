@@ -1,4 +1,4 @@
-const CACHE = 'knee-v7';
+const CACHE = 'knee-v8';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'apple-touch-icon.png', 'icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

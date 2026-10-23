@@ -139,6 +139,12 @@
   .ease span { margin-right: 4px; }
   .ease button { width: 36px; height: 32px; border-radius: 10px; background: var(--bg); border: 2px solid transparent; font-weight: 600; color: var(--text); }
   .ease button.on { background: var(--better-bg); border-color: var(--better); color: var(--better); }
+  .med { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--bg); margin-bottom: 8px; }
+  .med .t { flex: 1; min-width: 0; }
+  .med .t small { display: block; color: var(--muted); font-size: 13px; }
+  .med .bar { width: 4px; align-self: stretch; border-radius: 2px; background: var(--s7); }
+  .ice-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ice-row .mini { justify-content: space-between; background: var(--bg); border-radius: 12px; padding: 8px 10px; color: var(--text); }
   .link-btn { color: var(--accent); font-weight: 600; padding: 10px 0 0; font-size: 15px; }
   .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
   .field-row label, .sheet label { font-size: 13px; color: var(--muted); display: block; }
@@ -256,6 +262,20 @@
     </div>
 
     <div class="card">
+      <h2>Medicine</h2>
+      <div id="medList"></div>
+      <button class="link-btn" id="medAdd">+ Add medicine</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Ice</h2><span class="muted small">times iced</span></div>
+      <div class="ice-row">
+        <div class="mini">Left <span><button data-ice="L" data-d="-1" aria-label="Left knee one less">−</button> <b id="iceL">0</b> <button data-ice="L" data-d="1" aria-label="Left knee one more">+</button></span></div>
+        <div class="mini">Right <span><button data-ice="R" data-d="-1" aria-label="Right knee one less">−</button> <b id="iceR">0</b> <button data-ice="R" data-d="1" aria-label="Right knee one more">+</button></span></div>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-head"><h2>Exercises</h2><span class="muted small" id="exCount"></span></div>
       <div id="exList"></div>
       <button class="link-btn" id="exAdd">+ Add exercise</button>
@@ -296,6 +316,8 @@
       <div id="painChart"></div>
       <div class="legend">
         <span>0 = no pain · 50 = can't bear weight</span>
+        <span><span class="sw" style="background:var(--s7);opacity:.5"></span>medicine</span>
+        <span>❄ times iced</span>
         <span><span class="star">★</span> goal realised</span>
       </div>
     </div>
@@ -363,6 +385,23 @@
   </div>
 </div>
 
+<div id="medSheetWrap" class="hidden">
+  <div class="backdrop" id="medBackdrop"></div>
+  <div class="sheet">
+    <h3 id="medSheetTitle">Medicine</h3>
+    <label style="margin-top:12px">Name<input id="medName" placeholder="e.g. Naproxen" enterkeyhint="done"></label>
+    <label style="margin-top:10px">Dose (optional)<input id="medDose" placeholder="e.g. 500 mg twice a day" enterkeyhint="done"></label>
+    <div class="field-row">
+      <label>Started<input id="medStart" type="date"></label>
+      <label>Stopped<input id="medEnd" type="date"></label>
+    </div>
+    <div class="muted small" style="margin-top:6px">Leave “Stopped” empty while you're still taking it.</div>
+    <button class="btn-primary" id="medSave">Save</button>
+    <button class="btn-secondary" id="medStopBtn" style="margin-top:8px">Stopped on this day</button>
+    <button class="btn-danger" id="medDelete">Delete</button>
+  </div>
+</div>
+
 <div id="exSheetWrap" class="hidden">
   <div class="backdrop" id="exBackdrop"></div>
   <div class="sheet">
@@ -413,6 +452,7 @@
 const KEY = 'kneeTracker.v1';
 const DEFAULT_EXERCISES = ['Double leg heel raises', 'Double leg glute bridges', 'Stand up from seated', 'Straight leg lifts'];
 function withDefaults(d) {
+  if (!Array.isArray(d.meds)) d.meds = []; // medicine courses: { id, name, dose, start, end|null }
   if (!Array.isArray(d.exercises)) {
     d.exercises = DEFAULT_EXERCISES.map((name, i) => ({ id: 'ex' + i, name, sets: 3, reps: 10 }));
   }
@@ -514,6 +554,11 @@ function renderToday() {
   $('painGuide').innerHTML = PAIN_MARKERS.map(([n, t]) =>
     `<button data-pain="${n}" class="${logged && p === n ? 'on' : ''}"><b>${n}</b><span>${esc(t)}</span></button>`).join('');
 
+  renderMeds();
+  const ice = e.ice || {};
+  $('iceL').textContent = ice.L || 0;
+  $('iceR').textContent = ice.R || 0;
+
   renderExercises();
 
   if (document.activeElement !== $('steps')) $('steps').value = e.steps ?? '';
@@ -545,6 +590,68 @@ $('painClear').onclick = () => { setEntry(current, { pain: null }); renderToday(
 // ---------- Exercises ----------
 // A day's log stores a snapshot { name, sets, reps, ease } per exercise id,
 // so later changes to an exercise's settings never rewrite past days.
+// ---------- Medicine ----------
+const medsOn = d => db.meds.filter(m => m.start <= d && (!m.end || m.end >= d)).sort((a, b) => a.start.localeCompare(b.start));
+function renderMeds() {
+  const on = medsOn(current);
+  $('medList').innerHTML = on.length ? on.map(m => {
+    const day = daysBetween(m.start, current) + 1;
+    return `<div class="med"><span class="bar"></span><div class="t"><b>${esc(m.name)}</b>${m.dose ? ` · ${esc(m.dose)}` : ''}
+      <small>Day ${day} · since ${fmtLong(m.start)}${m.end ? ` · until ${fmtShort(m.end)}` : ''}</small></div>
+      <button class="icon-btn" data-med="${m.id}">Edit</button></div>`;
+  }).join('') : `<div class="muted small" style="padding:2px 0 4px">No medicine on this day.</div>`;
+}
+let medEditing = null;
+function openMedSheet(id) {
+  const m = id && db.meds.find(m => m.id === id);
+  medEditing = m ? m.id : null;
+  $('medSheetTitle').textContent = m ? 'Edit medicine' : 'Add medicine';
+  $('medName').value = m ? m.name : '';
+  $('medDose').value = m ? m.dose || '' : '';
+  $('medStart').value = m ? m.start : current;
+  $('medEnd').value = m ? m.end || '' : '';
+  $('medStart').max = $('medEnd').max = todayIso();
+  $('medStopBtn').classList.toggle('hidden', !m || !!m.end);
+  $('medDelete').classList.toggle('hidden', !m);
+  $('medSheetWrap').classList.remove('hidden');
+}
+function closeMedSheet() { document.activeElement.blur(); $('medSheetWrap').classList.add('hidden'); }
+$('medAdd').onclick = () => openMedSheet(null);
+$('medBackdrop').onclick = closeMedSheet;
+$('medList').addEventListener('click', e => { const b = e.target.closest('[data-med]'); if (b) openMedSheet(b.dataset.med); });
+$('medSave').onclick = () => {
+  const name = $('medName').value.trim(), start = $('medStart').value, end = $('medEnd').value || null;
+  if (!name) { $('medName').focus(); return; }
+  if (!start) { $('medStart').focus(); return; }
+  if (end && end < start) { alert('The stop date is before the start date.'); return; }
+  const fields = { name, dose: $('medDose').value.trim(), start, end };
+  const m = db.meds.find(m => m.id === medEditing);
+  if (m) Object.assign(m, fields); else db.meds.push({ id: uid(), ...fields });
+  save(); closeMedSheet(); renderToday();
+};
+$('medStopBtn').onclick = () => {
+  const m = db.meds.find(m => m.id === medEditing);
+  if (m) { m.end = current < m.start ? m.start : current; save(); }
+  closeMedSheet(); renderToday();
+};
+$('medDelete').onclick = () => {
+  const m = db.meds.find(m => m.id === medEditing);
+  if (!m || !confirm(`Delete ${m.name} from your medicine timeline?`)) return;
+  db.meds = db.meds.filter(x => x !== m);
+  save(); closeMedSheet(); renderToday();
+};
+
+// ---------- Ice ----------
+document.querySelector('.ice-row').addEventListener('click', e => {
+  const b = e.target.closest('[data-ice]');
+  if (!b) return;
+  const ice = Object.assign({ L: 0, R: 0 }, entry(current).ice);
+  ice[b.dataset.ice] = Math.max(0, (ice[b.dataset.ice] || 0) + Number(b.dataset.d));
+  setEntry(current, { ice: ice.L || ice.R ? ice : null });
+  renderToday();
+});
+const iceText = ice => ice && (ice.L || ice.R) ? [ice.L ? `L×${ice.L}` : '', ice.R ? `R×${ice.R}` : ''].filter(Boolean).join(' ') : '';
+
 function renderExercises() {
   const log = entry(current).ex || {};
   const shown = db.exercises.filter(x => !x.archived || log[x.id]);
@@ -790,7 +897,7 @@ function renderProgress() {
     <div class="stat"><b>${avgSteps != null ? avgSteps.toLocaleString() : '–'}</b><span>Avg steps</span></div>
     <div class="stat"><b>${goalDays.length}</b><span>Goals realised</span></div>`;
 
-  $('painChart').innerHTML = painVals.length ? painChart(pain, goalDays) : `<div class="empty">Log your pain score to see your graph.</div>`;
+  $('painChart').innerHTML = painVals.length || medsInRange(start, t) ? painChart(pain, goalDays) : `<div class="empty">Log your pain score to see your graph.</div>`;
   $('stepsChart').innerHTML = stepVals.length ? stepsChart(steps) : `<div class="empty">No steps logged in this period.</div>`;
 
   const exDays = days.map(d => ({ d, items: exItems(d) }));
@@ -813,7 +920,7 @@ function renderProgress() {
     const ex = Object.values(e.ex || {});
     return `<button class="log-item" data-go="${d}">
       <div class="log-top"><strong>${fmtLong(d)}</strong>${badge}</div>
-      <div class="muted small">${e.steps != null ? `${e.steps.toLocaleString()} steps` : ''}${(goalsByDay[d] || []).map(t => ` <span class="star">★</span> ${esc(t)}`).join('')}</div>
+      <div class="muted small">${[e.steps != null ? `${e.steps.toLocaleString()} steps` : '', iceText(e.ice) ? `iced ${iceText(e.ice)}` : '', medsOn(d).map(m => esc(m.name)).join(', ')].filter(Boolean).join(' · ')}${(goalsByDay[d] || []).map(t => ` <span class="star">★</span> ${esc(t)}`).join('')}</div>
       ${ex.length ? `<div class="muted small">✓ ${ex.map(x => `${esc(x.name)} ${x.sets}×${x.reps}${x.ease ? ` (${x.ease}/5)` : ''}`).join(' · ')}</div>` : ''}
       ${e.note ? `<div class="log-note">${esc(e.note)}</div>` : ''}
     </button>`;
@@ -821,6 +928,7 @@ function renderProgress() {
 }
 
 const W = 340, PL = 30, PR = 8;
+const medsInRange = (a, b) => db.meds.some(m => m.start <= b && (!m.end || m.end >= a));
 function xScale(i, n) { return PL + (n === 1 ? (W - PL - PR) / 2 : i * (W - PL - PR) / (n - 1)); }
 function xLabels(days, H) {
   const n = days.length, idx = [0, Math.floor((n - 1) / 2), n - 1];
@@ -847,6 +955,23 @@ function painChart(pain, goals) {
   const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
   const area = pts.length > 1 ? `${path} L${pts[pts.length - 1][0].toFixed(1)} ${y(0)} L${pts[0][0].toFixed(1)} ${y(0)} Z` : '';
   const dots = pts.map(([x, py, p]) => `<circle cx="${x}" cy="${py}" r="${n > 45 ? 2 : 3.2}" fill="var(--card)" stroke="var(--accent)" stroke-width="2"><title>${fmtShort(p.d)}: ${p.y}</title></circle>`).join('');
+  // Medicine: a light band over each course's days, with its name on a thin lane at the top
+  const half = n > 1 ? (xScale(1, n) - xScale(0, n)) / 2 : 6;
+  const first = pain[0].d, last = pain[n - 1].d;
+  const meds = db.meds.filter(m => m.start <= last && (!m.end || m.end >= first)).sort((a, b) => a.start.localeCompare(b.start));
+  const medMarks = meds.map((m, k) => {
+    const i0 = Math.max(0, daysBetween(first, m.start)), i1 = Math.min(n - 1, daysBetween(first, m.end || last));
+    const x0 = Math.max(PL, xScale(i0, n) - half), x1 = Math.min(W - PR, xScale(i1, n) + half);
+    const ly = PT + 2 + k * 13;
+    return `<rect x="${x0.toFixed(1)}" y="${PT}" width="${(x1 - x0).toFixed(1)}" height="${H - PT - PB}" fill="var(--s7)" opacity=".07"/>
+      <rect x="${x0.toFixed(1)}" y="${ly}" width="${(x1 - x0).toFixed(1)}" height="3" rx="1.5" fill="var(--s7)" opacity=".7"/>
+      <text x="${(x0 + 3).toFixed(1)}" y="${ly + 12}" style="fill:var(--s7);font-weight:600">${esc(m.name)}<title>${esc(m.name)}${m.dose ? ` · ${esc(m.dose)}` : ''}: ${fmtShort(m.start)} – ${m.end ? fmtShort(m.end) : 'now'}</title></text>`;
+  }).join('');
+  // Ice: ❄ with the day's total just above the baseline
+  const iceMarks = pain.map((p, i) => {
+    const ice = db.entries[p.d]?.ice, tot = ice ? (ice.L || 0) + (ice.R || 0) : 0;
+    return tot ? `<text x="${xScale(i, n)}" y="${H - PB - 3}" text-anchor="middle" style="fill:var(--accent);font-size:${n > 45 ? 8 : 10}px">❄${n > 31 ? '' : tot}<title>${fmtShort(p.d)}: iced ${iceText(ice)}</title></text>` : '';
+  }).join('');
   const stars = goals.map(g => {
     const i = pain.findIndex(p => p.d === g.achieved);
     if (i < 0) return '';
@@ -855,7 +980,7 @@ function painChart(pain, goals) {
       <text x="${x}" y="${PT - 6}" text-anchor="middle" style="fill:var(--goal);font-size:13px">★<title>${esc(g.text)}</title></text>`;
   }).join('');
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Knee pain per day, 0 to 50">
-    ${grid}${stars}
+    ${medMarks}${grid}${stars}${iceMarks}
     ${area ? `<path d="${area}" fill="var(--accent)" opacity=".08"/>` : ''}
     <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}${xLabels(pain.map(p => p.d), H)}
@@ -1001,7 +1126,9 @@ function comboChart(days) {
     html: vals.map(v => `<b>${fmtLong(v.d)}</b>`
       + tipRow('Pain', v.pain != null ? `${v.pain}/50` : '–')
       + tipRow('Steps', v.steps != null ? v.steps.toLocaleString() : '–')
-      + tipRow('Exercises', v.items.length ? `${v.items.length} · ${v.reps} reps` : '–')),
+      + tipRow('Exercises', v.items.length ? `${v.items.length} · ${v.reps} reps` : '–')
+      + tipRow('Ice', iceText(db.entries[v.d]?.ice) || '–')
+      + (medsOn(v.d).length ? tipRow('Medicine', medsOn(v.d).map(m => esc(m.name)).join(', ')) : '')),
   };
   const crosshair = `<line class="xh" y1="${P[0].top - 4}" y2="${P[2].top + P[2].h}" stroke="var(--text)" stroke-width="1" opacity=".35" style="display:none"/>`;
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Pain, steps and exercise reps per day on a shared date axis">${out}${crosshair}${hitCols(n, 0, H - 18)}${xLabels(days, H)}</svg>`;
@@ -1025,6 +1152,10 @@ function corrTable(days) {
     rows.push([`&lt; ${median.toLocaleString()} steps`, stepDays.filter(d => db.entries[d].steps < median)]);
   }
   rows.push(['Did exercises', exDaysYes], ['No exercises', exDaysNo]);
+  if (db.meds.length) {
+    const logged = days.filter(d => pain(d) != null);
+    rows.push(['On medicine', logged.filter(d => medsOn(d).length)], ['No medicine', logged.filter(d => !medsOn(d).length)]);
+  }
   return `<table class="corr">
     <tr><th>Average pain</th><th>Same day</th><th>Next day</th></tr>
     ${rows.map(([label, ds]) => `<tr><td>${label}</td><td>${avg(ds, 0)}</td><td>${avg(ds, 1)}</td></tr>`).join('')}
