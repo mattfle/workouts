@@ -179,8 +179,8 @@
   input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; }
 
   /* Chart */
-  .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
-  .chart-head .seg { width: 150px; }
+  .chart-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .chart-head .seg { width: 100%; }
   .chart-head .seg button { padding: 5px 0; font-size: 13px; }
   .chart { position: relative; height: 200px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
   .chart svg { display: block; overflow: visible; }
@@ -286,7 +286,6 @@
   // Rep-equivalents for the reps chart: one rep ≈ 3 s under tension at a normal tempo,
   // so an isometric hold counts as secs / 3 reps. Guitar uses its own minutes-per-rep setting.
   const SECS_PER_REP = 3;
-  const GUITAR_MINS_PER_REP = 2;
   const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
   // ---------- helpers ----------
@@ -359,7 +358,7 @@
       if (sec.sets == null) sec.sets = 2;
       for (const h of sec.history) if (h.sets == null) h.sets = 2;
     }
-    // Guitar is logged in minutes and converted to rep-equivalents (2 min ≈ 1 rep).
+    // Guitar is logged in minutes and scored at a fixed 50 points per 30 min.
     if (!d.guitar) d.guitar = { minutes: 30, history: [] };
     return d;
   }
@@ -408,7 +407,28 @@
   }
 
   const guitarDay = () => state.guitar.history.find(h => h.date === ui.day);
-  const guitarReps = mins => Math.round(mins / GUITAR_MINS_PER_REP * 10) / 10;
+  // ---------- load & points ----------
+  // Load = weight actually moved × sets × reps (holds: 1 rep per SECS_PER_REP s).
+  // Points = load ÷ the first logged session of that exercise and type × 100,
+  // so each exercise is compared with its own start and can be stacked fairly.
+  const toKg = (w, unit) => unit === 'lbs' ? w / 2.20462 : w;
+  function liftedKg(ex, h) {
+    if (h.weight == null) return null;
+    const w = toKg(h.weight, h.unit);
+    if (!ex.assisted) return w;
+    return state.bodyKg ? Math.max(0, state.bodyKg - w) : null; // assisted: body weight minus the assist
+  }
+  const repsOf = (kind, h) => kind === 'iso' ? (h.secs || 0) / SECS_PER_REP : (h.reps || 0);
+  const loadOf = (ex, kind, h) => { const w = liftedKg(ex, h); return w == null ? null : w * (h.sets || 0) * repsOf(kind, h); };
+  const estMax = (ex, kind, h) => { const w = liftedKg(ex, h); return w == null ? null : w * (1 + repsOf(kind, h) / 30); }; // Epley
+  function baselineLoad(ex, kind) {
+    for (const h of ex[kind].history) { const l = loadOf(ex, kind, h); if (l) return l; }
+    return null;
+  }
+  // Without a usable load (no weight, or assisted with no body weight) a session counts as 100
+  const scoreOf = (ex, kind, h) => { const l = loadOf(ex, kind, h), b = baselineLoad(ex, kind); return l != null && b ? l / b * 100 : 100; };
+  const GUITAR_PTS_PER_30 = 50;
+  const guitarPts = mins => Math.round(mins / 30 * GUITAR_PTS_PER_30);
   function toggleGuitar() {
     const g = state.guitar, t = ui.day;
     if (guitarDay()) g.history = g.history.filter(h => h.date !== t);
@@ -533,7 +553,7 @@
         </a>
         <div class="line">
           <span class="tag">MIN</span>
-          <span class="grow cfg">${fmtNum(guitarDay()?.minutes ?? state.guitar.minutes)} min · ≈ ${fmtNum(guitarReps(guitarDay()?.minutes ?? state.guitar.minutes))} reps</span>
+          <span class="grow cfg">${fmtNum(guitarDay()?.minutes ?? state.guitar.minutes)} min · ${guitarPts(guitarDay()?.minutes ?? state.guitar.minutes)} pts</span>
           <button class="check" data-act="tick-guitar" aria-pressed="${!!guitarDay()}" aria-label="Guitar done ${dayName(day)}">${CHECK_SVG}</button>
         </div>
       </div>
@@ -546,11 +566,12 @@
     const days = volumeDays();
     const active = days.filter(d => d.segs.length).length;
     const total = Math.round(days.reduce((a, d) => a + d.total, 0));
+    const needBody = !state.bodyKg && state.exercises.some(ex => ex.assisted);
     const gMin = state.guitar.history.filter(h => h.date >= days[0].date).reduce((a, h) => a + (h.minutes || 0), 0);
     const log = armDates().sort().reverse().slice(0, 60).map(date => {
-      const segs = daySegs(date), tot = segs.reduce((a, x) => a + x.reps, 0);
+      const segs = daySegs(date), tot = segs.reduce((a, x) => a + x.pts, 0);
       return `<button class="log-item" data-act="goto" data-date="${date}">
-        <div class="row"><b class="grow">${fmtLong(date)}</b><span class="count">≈ ${fmtNum(Math.round(tot))} reps</span></div>
+        <div class="row"><b class="grow">${fmtLong(date)}</b><span class="count">${Math.round(tot)} pts</span></div>
         <div class="small muted">${segs.map(sg => `${esc(sg.name)} ${sg.detail}`).join(' · ')}</div>
       </button>`;
     }).join('');
@@ -564,19 +585,28 @@
       </div>
       <div class="stats">
         <div class="stat"><b>${active}</b><span>Active days</span></div>
-        <div class="stat"><b>${total.toLocaleString()}</b><span>Reps ≈</span></div>
+        <div class="stat"><b>${total.toLocaleString()}</b><span>Points</span></div>
         <div class="stat"><b>${gMin ? fmtNum(gMin) : '–'}</b><span>Guitar min</span></div>
       </div>
 
-      <h2>Reps per day</h2>
+      <h2>Points per day</h2>
       <div class="card">
+        ${needBody ? `<p class="small" style="margin:0 0 10px;color:var(--danger)">Add your body weight under Settings so assisted exercises are scored by the weight you lift.</p>` : ''}
         <div class="chart" id="volChart"></div>
         <div class="legend" id="volLegend"></div>
-        <p class="small muted" style="margin:10px 0 0">Isometric holds count as 1 rep per ${SECS_PER_REP} s held. Guitar counts as 1 rep per ${GUITAR_MINS_PER_REP} min.</p>
+        <p class="small muted" style="margin:10px 0 0">100 points = your first logged session of that exercise (isometric and dynamic each). Load is weight × sets × reps, holds count 1 rep per ${SECS_PER_REP} s, and assisted exercises use body weight minus the assist. Guitar is ${GUITAR_PTS_PER_30} points per 30 min.</p>
       </div>
 
       <h2>Log</h2>
       <div class="card">${log || '<p class="small muted" style="margin:0">Nothing logged yet.</p>'}</div>
+
+      <h2>Settings</h2>
+      <div class="card">
+        <div class="field">
+          <label for="f-body">Body weight (kg)<div class="small muted">For assisted exercises</div></label>
+          <input id="f-body" inputmode="decimal" value="${state.bodyKg ?? ''}" placeholder="kg">
+        </div>
+      </div>
 
       <h2>Backup</h2>
       <div class="btn-row">
@@ -594,7 +624,7 @@
     const hist = g.history.slice().reverse().map(h => `
       <div class="hist-row">
         <span class="d">${fmtDate(h.date)}</span>
-        <span class="grow">${fmtNum(h.minutes)} min · ≈ ${fmtNum(guitarReps(h.minutes))} reps</span>
+        <span class="grow">${fmtNum(h.minutes)} min · ${guitarPts(h.minutes)} pts</span>
         <button class="x" data-act="g-del" data-date="${h.date}" aria-label="Delete entry from ${fmtDate(h.date)}">×</button>
       </div>`).join('');
     app.innerHTML = `
@@ -607,7 +637,7 @@
           ${CHECK_SVG}<span>${t ? 'Done' : 'Mark done'}${isToday ? ' today' : ''}</span>
         </button>
         ${t ? `<div class="times">
-          <div><div>Minutes</div><div class="small muted">≈ ${fmtNum(guitarReps(t.minutes))} reps</div></div>
+          <div><div>Minutes</div><div class="small muted">${guitarPts(t.minutes)} pts</div></div>
           <div class="stepper">
             <button class="step" data-act="g-min" data-d="-5" aria-label="5 minutes less">−</button>
             <span class="times-num">${fmtNum(t.minutes)}</span>
@@ -705,11 +735,18 @@
       <h2>Progress</h2>
       <div class="card">
         <div class="chart-head">
-          <span class="small muted">${metric === 'weight' ? `Weight (${sec.unit})${ex.assisted ? ' · lower is better' : ''}` : (kind === 'iso' ? 'Hold time (s)' : 'Reps')}</span>
           <div class="seg">
             <button data-act="metric" data-m="weight" aria-pressed="${metric === 'weight'}">Weight</button>
             <button data-act="metric" data-m="amount" aria-pressed="${metric === 'amount'}">${k.metricLabel}</button>
+            <button data-act="metric" data-m="volume" aria-pressed="${metric === 'volume'}">Volume</button>
+            <button data-act="metric" data-m="max" aria-pressed="${metric === 'max'}">Est. max</button>
           </div>
+          <span class="small muted">${{
+            weight: `Weight (${sec.unit})${ex.assisted ? ' · lower is better' : ''}`,
+            amount: kind === 'iso' ? 'Hold time (s)' : 'Reps',
+            volume: `Volume: kg${ex.assisted ? ' lifted' : ''} × sets × reps${kind === 'iso' ? ` (1 rep per ${SECS_PER_REP} s)` : ''}`,
+            max: `Estimated max (kg${ex.assisted ? ' lifted' : ''}) · weight × (1 + reps ÷ 30)`,
+          }[metric]}</span>
         </div>
         <div class="chart" id="chart"></div>
         ${sec.history.length ? `<details class="hist"><summary>History (${sec.history.length})</summary>${hist}</details>` : ''}
@@ -747,9 +784,16 @@
     const sec = ex[kind], k = KINDS[kind], metric = ui.metric[kind];
     const pts = sec.history.map(h => ({
       h, t: dateOf(h.date).getTime(),
-      y: metric === 'weight' ? toUnit(h.weight, h.unit, sec.unit) : h[k.amount],
+      y: metric === 'weight' ? toUnit(h.weight, h.unit, sec.unit)
+        : metric === 'volume' ? loadOf(ex, kind, h)
+        : metric === 'max' ? estMax(ex, kind, h)
+        : h[k.amount],
     })).filter(p => p.y != null);
 
+    if (!pts.length && ex.assisted && !state.bodyKg && (metric === 'volume' || metric === 'max')) {
+      el.innerHTML = `<p class="empty">Add your body weight under Arms → Progress → Settings to see this for an assisted exercise.</p>`;
+      return;
+    }
     if (!pts.length) {
       el.innerHTML = `<p class="empty">Tick “Mark done today” after a session and your progress will appear here.</p>`;
       return;
@@ -796,7 +840,8 @@
       const px = sx(best.t), py = sy(best.y), h = best.h;
       cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
       hot.setAttribute('cx', px); hot.setAttribute('cy', py); hot.setAttribute('visibility', 'visible');
-      tip.innerHTML = `${fmtDate(h.date)}<br><b>${fmtNum(h.weight)} ${h.unit}</b> · ${setsText(k, h)}${h.feel ? `<br>Feel ${h.feel} · ${feelWord(h.feel)}` : ''}`;
+      const val = metric === 'volume' ? `<br>Volume <b>${Math.round(best.y)}</b>` : metric === 'max' ? `<br>Est. max <b>${fmtNum(Math.round(best.y * 10) / 10)} kg</b>` : '';
+      tip.innerHTML = `${fmtDate(h.date)}<br><b>${fmtNum(h.weight)} ${h.unit}</b> · ${setsText(k, h)}${val}${h.feel ? `<br>Feel ${h.feel} · ${feelWord(h.feel)}` : ''}`;
       tip.style.display = 'block';
       const half = tip.offsetWidth / 2;
       tip.style.left = Math.min(Math.max(px, half), W - half) + 'px';
@@ -816,13 +861,14 @@
     const segs = [];
     state.exercises.forEach((ex, i) => {
       const iso = ex.iso.history.find(h => h.date === date), dyn = ex.dyn.history.find(h => h.date === date);
-      const reps = (iso ? (iso.sets || 0) * (iso.secs || 0) / SECS_PER_REP : 0) + (dyn ? (dyn.sets || 0) * (dyn.reps || 0) : 0);
       if (!iso && !dyn) return;
-      const parts = [iso && `ISO ${fmtNum(iso.sets)}×${fmtNum(iso.secs)}s`, dyn && `DYN ${fmtNum(dyn.sets)}×${fmtNum(dyn.reps)}`].filter(Boolean);
-      segs.push({ name: ex.name, color: exColor(i), reps, detail: parts.join(' + ') });
+      const pts = (iso ? scoreOf(ex, 'iso', iso) : 0) + (dyn ? scoreOf(ex, 'dyn', dyn) : 0);
+      const w = h => h.weight == null ? '' : `${fmtNum(h.weight)} ${h.unit}${ex.assisted ? ' assist' : ''} `;
+      const parts = [iso && `ISO ${w(iso)}${fmtNum(iso.sets)}×${fmtNum(iso.secs)}s`, dyn && `DYN ${w(dyn)}${fmtNum(dyn.sets)}×${fmtNum(dyn.reps)}`].filter(Boolean);
+      segs.push({ name: ex.name, color: exColor(i), pts, detail: parts.join(' + ') });
     });
     const g = state.guitar.history.find(h => h.date === date);
-    if (g && g.minutes) segs.push({ name: 'Guitar', color: 'var(--s8)', reps: guitarReps(g.minutes), detail: `${fmtNum(g.minutes)} min` });
+    if (g && g.minutes) segs.push({ name: 'Guitar', color: 'var(--s8)', pts: guitarPts(g.minutes), detail: `${fmtNum(g.minutes)} min` });
     return segs;
   }
   const armDates = () => [...new Set(state.exercises.flatMap(ex => [...ex.iso.history, ...ex.dyn.history])
@@ -837,8 +883,8 @@
     const days = [];
     for (let d = start; d <= t; d = shiftDay(d, 1)) days.push(d);
     return days.map(date => {
-      const segs = daySegs(date).filter(sg => sg.reps > 0);
-      return { date, segs, total: segs.reduce((a, x) => a + x.reps, 0) };
+      const segs = daySegs(date).filter(sg => sg.pts > 0);
+      return { date, segs, total: segs.reduce((a, x) => a + x.pts, 0) };
     });
   }
 
@@ -868,8 +914,8 @@
     const bars = days.map((d, i) => {
       let acc = 0;
       return d.segs.map((sg, k) => {
-        const y0 = sy(acc), y1 = sy(acc + sg.reps);
-        acc += sg.reps;
+        const y0 = sy(acc), y1 = sy(acc + sg.pts);
+        acc += sg.pts;
         const h = Math.max(1, y0 - y1 - (k ? 2 : 0)), x = sx(i) - bw / 2;
         if (k < d.segs.length - 1) return `<rect x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${sg.color}"/>`;
         const r = Math.min(3, bw / 2, h);
@@ -878,7 +924,7 @@
     }).join('');
 
     el.innerHTML = `
-      <svg width="${W}" height="${H}" role="img" aria-label="Reps per day, stacked by exercise">
+      <svg width="${W}" height="${H}" role="img" aria-label="Points per day, stacked by exercise">
         ${grid}${xLabels}
         <rect id="vhot" y="${m.t}" height="${ih}" fill="var(--text)" opacity=".06" visibility="hidden"/>
         ${bars}
@@ -892,7 +938,7 @@
       const d = days[i], px = sx(i);
       hot.setAttribute('x', px - bw / 2 - 3); hot.setAttribute('width', bw + 6); hot.setAttribute('visibility', 'visible');
       tip.innerHTML = `${fmtDate(d.date)}` + (d.segs.length
-        ? d.segs.slice().reverse().map(sg => `<br><span class="sw" style="background:${sg.color}"></span>${esc(sg.name)} · ${sg.detail} ≈ <b>${fmtNum(Math.round(sg.reps))}</b>`).join('') + `<br>Total ≈ <b>${fmtNum(Math.round(d.total))}</b> reps`
+        ? d.segs.slice().reverse().map(sg => `<br><span class="sw" style="background:${sg.color}"></span>${esc(sg.name)} · ${sg.detail} → <b>${Math.round(sg.pts)}</b>`).join('') + `<br>Total <b>${Math.round(d.total)}</b> pts`
         : '<br>Nothing logged');
       tip.style.display = 'block';
       const half = tip.offsetWidth / 2;
@@ -1019,6 +1065,11 @@
 
   app.addEventListener('change', e => {
     const t = e.target, ex = currentEx();
+    if (t.id === 'f-body') {
+      const v = parseNum(t.value);
+      state.bodyKg = v != null && v > 0 ? v : null;
+      return commit();
+    }
     if (t.id === 'g-minutes') {
       const v = parseNum(t.value);
       if (v != null && v > 0) state.guitar.minutes = v;

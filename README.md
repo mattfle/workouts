@@ -13,7 +13,10 @@ A simple workout tracker for iPhone. It's a web app you add to the Home Screen. 
 - Opens on a start page with two sections: **Knee & legs** and **Arms**
 - Arms **Today**: step between days with ‹ › or tap the date for a calendar, so any past day can be logged
 - **Guitar**, logged in minutes (usual minutes prefilled when ticked)
-- Arms **Progress** tab: stats, a **Reps per day** chart stacked by exercise (week to all time), a day-by-day log and backup. Isometric holds count as 1 rep per 3 s; guitar as 1 rep per 2 min
+- Arms **Progress** tab: stats, a **Points per day** chart stacked by exercise (week to all time), a day-by-day log, body weight setting and backup
+  - Load = weight lifted (kg) × sets × reps; holds count 1 rep per 3 s; assisted exercises use body weight minus the assist
+  - Points = load ÷ the first logged session of that exercise and type × 100; guitar is 50 points per 30 min
+- Each exercise's chart can also show **Volume** (load) and **Est. max** (weight × (1 + reps ÷ 30))
 - 5-week cycle tracker (Dynamic / ISO / Dynamic / ISO / Deload)
 - Export/Import of a JSON backup
 
