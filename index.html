@@ -534,7 +534,6 @@
         <div class="line">
           <span class="tag">MIN</span>
           <span class="grow cfg">${fmtNum(guitarDay()?.minutes ?? state.guitar.minutes)} min · ≈ ${fmtNum(guitarReps(guitarDay()?.minutes ?? state.guitar.minutes))} reps</span>
-          <span class="count">×${state.guitar.history.length}</span>
           <button class="check" data-act="tick-guitar" aria-pressed="${!!guitarDay()}" aria-label="Guitar done ${dayName(day)}">${CHECK_SVG}</button>
         </div>
       </div>
