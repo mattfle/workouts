@@ -208,12 +208,11 @@
   .tip .r em { margin-left: auto; padding-left: 10px; font-style: normal; font-weight: 600; color: var(--text); white-space: nowrap; }
   .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
   .legend .sw { margin-right: 5px; vertical-align: -1px; }
-  .corr { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 14px; }
-  .corr th, .corr td { text-align: right; padding: 7px 4px; border-bottom: 1px solid var(--line); }
-  .corr th:first-child, .corr td:first-child { text-align: left; }
-  .corr th { color: var(--muted); font-weight: 600; font-size: 12px; }
-  .corr td small { color: var(--muted); font-size: 11px; }
-  .corr tr:last-child td { border-bottom: 0; }
+  .ov { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); margin: -2px 0 10px; width: fit-content; }
+  .ov input { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: var(--accent); }
+  .infl { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 10px; padding: 8px 0 2px; text-align: left; font-weight: 600; }
+  .infl .check { display: grid; place-items: center; }
+  .infl.on .check { background: var(--worse); border-color: var(--worse); color: #fff; }
   .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 8px; }
   .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
   .stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
@@ -254,6 +253,7 @@
       <input type="range" class="pain-range" id="painRange" min="0" max="50" step="1" aria-label="Pain from 0 to 50">
       <div class="ticks" id="painTicks"></div>
       <div class="pain-desc" id="painDesc"></div>
+      <button class="infl" id="inflBtn" aria-pressed="false"><span class="check">✓</span>Inflammation</button>
       <div class="guide hidden" id="painGuide"></div>
       <div class="total">
         <span class="muted small" id="painCompare"></span>
@@ -318,22 +318,21 @@
         <span>0 = no pain · 50 = can't bear weight</span>
         <span><span class="sw" style="background:var(--s7);opacity:.5"></span>medicine</span>
         <span>❄ times iced</span>
+        <span><span class="sw" style="background:var(--worse);border-radius:50%"></span>inflamed</span>
         <span><span class="star">★</span> goal realised</span>
       </div>
     </div>
     <div class="card">
       <h2>Steps</h2>
-      <div id="stepsChart"></div>
+      <label class="ov"><input type="checkbox" data-ov="steps"> Show pain line</label>
+      <div class="chart-wrap" id="stepsChart"></div>
+      <div class="legend" id="stepsLegend"></div>
     </div>
     <div class="card">
       <h2>Exercises — total reps per day</h2>
+      <label class="ov"><input type="checkbox" data-ov="ex"> Show pain line</label>
       <div class="chart-wrap" id="exChart"></div>
       <div class="legend" id="exLegend"></div>
-    </div>
-    <div class="card">
-      <h2>Pain vs activity</h2>
-      <div class="chart-wrap" id="comboChart"></div>
-      <div id="corr"></div>
     </div>
     <div class="card">
       <h2>Log</h2>
@@ -554,6 +553,9 @@ function renderToday() {
   $('painGuide').innerHTML = PAIN_MARKERS.map(([n, t]) =>
     `<button data-pain="${n}" class="${logged && p === n ? 'on' : ''}"><b>${n}</b><span>${esc(t)}</span></button>`).join('');
 
+  $('inflBtn').classList.toggle('on', !!e.inflamed);
+  $('inflBtn').setAttribute('aria-pressed', !!e.inflamed);
+
   renderMeds();
   const ice = e.ice || {};
   $('iceL').textContent = ice.L || 0;
@@ -586,6 +588,7 @@ $('painGuide').addEventListener('click', e => {
   if (b) setPain(Number(b.dataset.pain));
 });
 $('painClear').onclick = () => { setEntry(current, { pain: null }); renderToday(); };
+$('inflBtn').onclick = () => { setEntry(current, { inflamed: entry(current).inflamed ? null : true }); renderToday(); };
 
 // ---------- Exercises ----------
 // A day's log stores a snapshot { name, sets, reps, ease } per exercise id,
@@ -898,16 +901,15 @@ function renderProgress() {
     <div class="stat"><b>${goalDays.length}</b><span>Goals realised</span></div>`;
 
   $('painChart').innerHTML = painVals.length || medsInRange(start, t) ? painChart(pain, goalDays) : `<div class="empty">Log your pain score to see your graph.</div>`;
-  $('stepsChart').innerHTML = stepVals.length ? stepsChart(steps) : `<div class="empty">No steps logged in this period.</div>`;
+  document.querySelectorAll('[data-ov]').forEach(c => { c.checked = !!overlay[c.dataset.ov]; });
+  $('stepsChart').innerHTML = stepVals.length ? stepsChart(steps, overlay.steps) : `<div class="empty">No steps logged in this period.</div>`;
+  $('stepsLegend').innerHTML = stepVals.length && overlay.steps ? PAIN_LEGEND : '';
 
   const exDays = days.map(d => ({ d, items: exItems(d) }));
   const exUsed = db.exercises.filter(x => exDays.some(e => e.items.some(it => it.id === x.id)));
-  $('exChart').innerHTML = exUsed.length ? exChart(exDays) : `<div class="empty">No exercises logged in this period.</div>`;
-  $('exLegend').innerHTML = exUsed.map(x => `<span><span class="sw" style="background:${exColor(x.id)}"></span>${esc(x.name)}</span>`).join('');
-
-  const hasAny = painVals.length || stepVals.length || exUsed.length;
-  $('comboChart').innerHTML = hasAny ? comboChart(days) : `<div class="empty">Log pain, steps and exercises to compare them.</div>`;
-  $('corr').innerHTML = hasAny ? corrTable(days) : '';
+  $('exChart').innerHTML = exUsed.length ? exChart(exDays, overlay.ex) : `<div class="empty">No exercises logged in this period.</div>`;
+  $('exLegend').innerHTML = exUsed.map(x => `<span><span class="sw" style="background:${exColor(x.id)}"></span>${esc(x.name)}</span>`).join('')
+    + (exUsed.length && overlay.ex ? PAIN_LEGEND : '');
 
   // log list (newest first, all time)
   const goalsByDay = {};
@@ -920,7 +922,7 @@ function renderProgress() {
     const ex = Object.values(e.ex || {});
     return `<button class="log-item" data-go="${d}">
       <div class="log-top"><strong>${fmtLong(d)}</strong>${badge}</div>
-      <div class="muted small">${[e.steps != null ? `${e.steps.toLocaleString()} steps` : '', iceText(e.ice) ? `iced ${iceText(e.ice)}` : '', medsOn(d).map(m => esc(m.name)).join(', ')].filter(Boolean).join(' · ')}${(goalsByDay[d] || []).map(t => ` <span class="star">★</span> ${esc(t)}`).join('')}</div>
+      <div class="muted small">${[e.inflamed ? '<span style="color:var(--worse);font-weight:600">inflamed</span>' : '', e.steps != null ? `${e.steps.toLocaleString()} steps` : '',iceText(e.ice) ? `iced ${iceText(e.ice)}` : '', medsOn(d).map(m => esc(m.name)).join(', ')].filter(Boolean).join(' · ')}${(goalsByDay[d] || []).map(t => ` <span class="star">★</span> ${esc(t)}`).join('')}</div>
       ${ex.length ? `<div class="muted small">✓ ${ex.map(x => `${esc(x.name)} ${x.sets}×${x.reps}${x.ease ? ` (${x.ease}/5)` : ''}`).join(' · ')}</div>` : ''}
       ${e.note ? `<div class="log-note">${esc(e.note)}</div>` : ''}
     </button>`;
@@ -949,12 +951,14 @@ function painChart(pain, goals) {
   const y = v => PT + (50 - v) / 50 * (H - PT - PB);
   const n = pain.length;
   const grid = ticks.map(t => `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" stroke-width="${t === 0 ? 1.5 : 1}" ${t === 0 ? '' : 'stroke-dasharray="2 3"'}/>
-    <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${t}</text>`).join('');
+    <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${t}</text>
+    <text x="${W - PR + 5}" y="${y(t) + 3}">${t}</text>`).join('');
   // connect logged days; unlogged days in between are skipped over
   const pts = pain.map((p, i) => p.y == null ? null : [xScale(i, n), y(p.y), p]).filter(Boolean);
   const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
   const area = pts.length > 1 ? `${path} L${pts[pts.length - 1][0].toFixed(1)} ${y(0)} L${pts[0][0].toFixed(1)} ${y(0)} Z` : '';
-  const dots = pts.map(([x, py, p]) => `<circle cx="${x}" cy="${py}" r="${n > 45 ? 2 : 3.2}" fill="var(--card)" stroke="var(--accent)" stroke-width="2"><title>${fmtShort(p.d)}: ${p.y}</title></circle>`).join('');
+  const dots = pts.map(([x, py, p]) => painDot(x, py, p.d, n)).join('')
+    + pain.map((p, i) => p.y == null && db.entries[p.d]?.inflamed ? painDot(xScale(i, n), y(0), p.d, n) : '').join('');
   // Medicine: a light band over each course's days, with its name on a thin lane at the top
   const half = n > 1 ? (xScale(1, n) - xScale(0, n)) / 2 : 6;
   const first = pain[0].d, last = pain[n - 1].d;
@@ -979,7 +983,7 @@ function painChart(pain, goals) {
     return `<line x1="${x}" x2="${x}" y1="${PT - 4}" y2="${H - PB}" stroke="var(--goal)" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>
       <text x="${x}" y="${PT - 6}" text-anchor="middle" style="fill:var(--goal);font-size:13px">★<title>${esc(g.text)}</title></text>`;
   }).join('');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Knee pain per day, 0 to 50">
+  return `<svg class="chart" viewBox="0 0 ${W + OVR} ${H}" role="img" aria-label="Knee pain per day, 0 to 50">
     ${medMarks}${grid}${stars}${iceMarks}
     ${area ? `<path d="${area}" fill="var(--accent)" opacity=".08"/>` : ''}
     <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
@@ -987,7 +991,7 @@ function painChart(pain, goals) {
   </svg>`;
 }
 
-function stepsChart(steps) {
+function stepsChart(steps, overlay) {
   const H = 150, PT = 8, PB = 18;
   const max = Math.max(...steps.map(s => s.y || 0), 1);
   const ticks = niceTicks(0, max);
@@ -1002,9 +1006,49 @@ function stepsChart(steps) {
   const inset = bw / 2;
   const bx = i => n === 1 ? xScale(0, 1) : PL + inset + i * (W - PL - PR - 2 * inset) / (n - 1);
   const bars = steps.map((s, i) => s.y == null ? '' :
-    `<rect x="${(bx(i) - bw / 2).toFixed(1)}" y="${y(s.y).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, y(0) - y(s.y)).toFixed(1)}" rx="${Math.min(3, bw / 2)}" fill="var(--accent)" opacity=".75"><title>${fmtShort(s.d)}: ${s.y.toLocaleString()}</title></rect>`).join('');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Steps per day">${grid}${bars}${xLabels(steps.map(s => s.d), H)}</svg>`;
+    `<path d="${topRounded(bx(i) - bw / 2, y(s.y), bw, Math.max(1, y(0) - y(s.y)), 3)}" fill="var(--accent)" opacity="${overlay ? '.4' : '.75'}"/>`).join('');
+  const days = steps.map(s => s.d);
+  tipData.stepsChart = {
+    x: steps.map((_, i) => bx(i)), vw: overlay ? W + OVR : W,
+    html: steps.map(s => `<b>${fmtLong(s.d)}</b>` + tipRow('Steps', s.y != null ? s.y.toLocaleString() : '–') + (overlay ? painTip(s.d) : '')),
+  };
+  return `<svg class="chart" viewBox="0 0 ${overlay ? W + OVR : W} ${H}" role="img" aria-label="Steps per day">${grid}${bars}${overlay ? painOverlay(days, bx, PT, H, PB) : ''}${hitCols(n, 0, H - PB)}${xLabels(days, H)}</svg>`;
 }
+
+// ---------- Pain on top of the bar charts (optional) ----------
+const OVR = 24; // extra room on the right for the pain scale
+let overlay = {};
+try { overlay = JSON.parse(localStorage.getItem(KEY + '.overlay')) || {}; } catch (e) {}
+const PAIN_LEGEND = `<span><span class="sw" style="background:var(--text);height:3px"></span>pain (right scale, 0–50)</span>
+  <span><span class="sw" style="background:var(--worse);border-radius:50%"></span>inflamed</span>`;
+// Pain dot: red on inflamed days
+function painDot(x, y, d, n, color = 'var(--accent)') {
+  const e = db.entries[d] || {}, label = `${fmtShort(d)}: ${typeof e.pain === 'number' ? e.pain : 'no pain score'}`;
+  return e.inflamed
+    ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${n > 45 ? 3.2 : 4.5}" fill="var(--worse)" stroke="var(--card)" stroke-width="1.5"><title>${label} · inflamed</title></circle>`
+    : `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${n > 45 ? 2 : 3.2}" fill="var(--card)" stroke="${color}" stroke-width="2"><title>${label}</title></circle>`;
+}
+// Pain line on its own 0–50 scale, labelled on the right, drawn over the bars with a halo so it stays readable
+function painOverlay(days, bx, PT, H, PB) {
+  const n = days.length, y = v => PT + (50 - v) / 50 * (H - PT - PB);
+  const pts = days.map((d, i) => { const v = db.entries[d]?.pain; return typeof v === 'number' ? [bx(i), y(v), d] : null; }).filter(Boolean);
+  const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const inflOnly = days.map((d, i) => db.entries[d]?.inflamed && typeof db.entries[d].pain !== 'number' ? [bx(i), y(0), d] : null).filter(Boolean);
+  const dots = [...pts, ...inflOnly].map(p => painDot(p[0], p[1], p[2], n, 'var(--text)')).join('');
+  const axis = [0, 25, 50].map(t => `<text x="${W - PR + 5}" y="${y(t) + 3}" style="fill:var(--text)">${t}</text>`).join('');
+  return `${path ? `<path d="${path}" fill="none" stroke="var(--card)" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="${path}" fill="none" stroke="var(--text)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ''}${dots}
+    <line x1="${W - PR + 1}" x2="${W - PR + 1}" y1="${PT}" y2="${H - PB}" stroke="var(--line)"/>${axis}`;
+}
+const painTip = d => {
+  const e = db.entries[d] || {};
+  return tipRow('Pain', typeof e.pain === 'number' ? `${e.pain}/50` : '–', 'var(--text)') + (e.inflamed ? tipRow('Inflamed', 'yes', 'var(--worse)') : '');
+};
+document.querySelectorAll('[data-ov]').forEach(c => c.addEventListener('change', () => {
+  overlay[c.dataset.ov] = c.checked;
+  try { localStorage.setItem(KEY + '.overlay', JSON.stringify(overlay)); } catch (e) {}
+  renderProgress();
+}));
 
 // ---------- Exercise & comparison charts ----------
 // Each exercise keeps one colour slot by its position in the list, so colours never shift between days or ranges.
@@ -1047,7 +1091,7 @@ function bindTips(id) {
     tip.innerHTML = data.html[i];
     const xh = wrap.querySelector('.xh');
     if (xh) { xh.setAttribute('x1', data.x[i]); xh.setAttribute('x2', data.x[i]); xh.style.display = ''; }
-    const scale = wrap.querySelector('svg').getBoundingClientRect().width / W;
+    const scale = wrap.querySelector('svg').getBoundingClientRect().width / (data.vw || W);
     const x = data.x[i] * scale, tw = tip.offsetWidth, ww = wrap.clientWidth;
     tip.style.left = Math.max(0, x + 14 + tw > ww ? x - tw - 14 : x + 14) + 'px';
   };
@@ -1057,7 +1101,7 @@ function bindTips(id) {
   document.addEventListener('pointerdown', e => { if (!wrap.contains(e.target)) hide(); });
 }
 
-function exChart(exDays) {
+function exChart(exDays, overlay) {
   const H = 160, PT = 8, PB = 18;
   const ticks = niceTicks(0, Math.max(1, ...exDays.map(e => exTotal(e.items))));
   const hi = ticks[ticks.length - 1];
@@ -1068,7 +1112,7 @@ function exChart(exDays) {
     <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${fmtK(t)}</text>`).join('');
   const inset = bw / 2;
   const bx = i => n === 1 ? xScale(0, 1) : PL + inset + i * (W - PL - PR - 2 * inset) / (n - 1);
-  const bars = exDays.map((e, i) => {
+  let bars = exDays.map((e, i) => {
     let acc = 0;
     return e.items.map((it, k) => {
       const y0 = y(acc), y1 = y(acc + it.total);
@@ -1081,89 +1125,18 @@ function exChart(exDays) {
         : `<rect x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${exColor(it.id)}"/>`;
     }).join('');
   }).join('');
+  if (overlay) bars = `<g opacity=".45">${bars}</g>`;
   tipData.exChart = {
-    x: exDays.map((_, i) => bx(i)),
-    html: exDays.map(e => `<b>${fmtLong(e.d)}</b>` + (e.items.length
+    x: exDays.map((_, i) => bx(i)), vw: overlay ? W + OVR : W,
+    html: exDays.map(e => `<b>${fmtLong(e.d)}</b>` + (overlay ? painTip(e.d) : '') + (e.items.length
       ? e.items.map(it => tipRow(esc(it.name), `${it.sets}×${it.reps}${it.ease ? ` · ${it.ease}/5` : ''}`, exColor(it.id))).join('')
         + tipRow('Total reps', exTotal(e.items))
       : `<div class="r">No exercises</div>`)),
   };
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Exercise reps per day, stacked by exercise">${grid}${bars}${hitCols(n, 0, H - PB)}${xLabels(exDays.map(e => e.d), H)}</svg>`;
+  return `<svg class="chart" viewBox="0 0 ${overlay ? W + OVR : W} ${H}" role="img" aria-label="Exercise reps per day, stacked by exercise">${grid}${bars}${overlay ? painOverlay(exDays.map(e => e.d), bx, PT, H, PB) : ''}${hitCols(n, 0, H - PB)}${xLabels(exDays.map(e => e.d), H)}</svg>`;
 }
-
-// Three aligned panels sharing one date axis (separate y-scales, never a dual axis)
-function comboChart(days) {
-  const n = days.length, H = 266;
-  const P = [
-    { key: 'pain', label: 'Pain (0–50)', top: 14, h: 84 },
-    { key: 'steps', label: 'Steps', top: 122, h: 48 },
-    { key: 'reps', label: 'Exercise reps', top: 194, h: 48 },
-  ];
-  const vals = days.map(d => {
-    const e = db.entries[d] || {}, items = exItems(d);
-    return { d, pain: typeof e.pain === 'number' ? e.pain : null, steps: e.steps ?? null, reps: items.length ? exTotal(items) : null, items };
-  });
-  const bw = Math.max(2, Math.min(10, (W - PL - PR) / n - 2));
-  let out = '';
-  for (const p of P) {
-    const max = p.key === 'pain' ? 50 : niceTicks(0, Math.max(1, ...vals.map(v => v[p.key] || 0))).pop();
-    const y = v => p.top + p.h - v / max * p.h;
-    out += `<text x="${PL}" y="${p.top - 5}" style="fill:var(--text);font-weight:600">${p.label}</text>`;
-    const ticks = p.key === 'pain' ? [0, 25, 50] : [0, max];
-    out += ticks.map(t => `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" ${t ? 'stroke-dasharray="2 3"' : ''}/>
-      <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${fmtK(t)}</text>`).join('');
-    if (p.key === 'pain') {
-      const pts = vals.map((v, i) => v.pain == null ? null : [xScale(i, n), y(v.pain)]).filter(Boolean);
-      out += `<path d="${pts.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-      out += pts.map(q => `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="${n > 45 ? 2 : 3}" fill="var(--card)" stroke="var(--accent)" stroke-width="2"/>`).join('');
-    } else {
-      out += vals.map((v, i) => v[p.key] == null ? '' :
-        `<path d="${topRounded(xScale(i, n) - bw / 2, y(v[p.key]), bw, Math.max(1, y(0) - y(v[p.key])), 2)}" fill="var(--muted)" opacity=".6"/>`).join('');
-    }
-  }
-  tipData.comboChart = {
-    x: vals.map((_, i) => xScale(i, n)),
-    html: vals.map(v => `<b>${fmtLong(v.d)}</b>`
-      + tipRow('Pain', v.pain != null ? `${v.pain}/50` : '–')
-      + tipRow('Steps', v.steps != null ? v.steps.toLocaleString() : '–')
-      + tipRow('Exercises', v.items.length ? `${v.items.length} · ${v.reps} reps` : '–')
-      + tipRow('Ice', iceText(db.entries[v.d]?.ice) || '–')
-      + (medsOn(v.d).length ? tipRow('Medicine', medsOn(v.d).map(m => esc(m.name)).join(', ')) : '')),
-  };
-  const crosshair = `<line class="xh" y1="${P[0].top - 4}" y2="${P[2].top + P[2].h}" stroke="var(--text)" stroke-width="1" opacity=".35" style="display:none"/>`;
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Pain, steps and exercise reps per day on a shared date axis">${out}${crosshair}${hitCols(n, 0, H - 18)}${xLabels(days, H)}</svg>`;
-}
-
-// Average pain on more- vs less-active days, same day and the day after
-function corrTable(days) {
-  const pain = d => { const v = db.entries[d]?.pain; return typeof v === 'number' ? v : null; };
-  const avg = (ds, offset) => {
-    const v = ds.map(d => pain(addDays(d, offset))).filter(x => x != null);
-    return v.length >= 2 ? `${Math.round(v.reduce((a, b) => a + b, 0) / v.length * 10) / 10} <small>(${v.length}d)</small>` : '–';
-  };
-  const stepDays = days.filter(d => db.entries[d]?.steps != null);
-  const sorted = stepDays.map(d => db.entries[d].steps).sort((a, b) => a - b);
-  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
-  const exDaysYes = days.filter(d => Object.keys(db.entries[d]?.ex || {}).length);
-  const exDaysNo = days.filter(d => !Object.keys(db.entries[d]?.ex || {}).length && pain(d) != null);
-  const rows = [];
-  if (median != null) {
-    rows.push([`≥ ${median.toLocaleString()} steps`, stepDays.filter(d => db.entries[d].steps >= median)]);
-    rows.push([`&lt; ${median.toLocaleString()} steps`, stepDays.filter(d => db.entries[d].steps < median)]);
-  }
-  rows.push(['Did exercises', exDaysYes], ['No exercises', exDaysNo]);
-  if (db.meds.length) {
-    const logged = days.filter(d => pain(d) != null);
-    rows.push(['On medicine', logged.filter(d => medsOn(d).length)], ['No medicine', logged.filter(d => !medsOn(d).length)]);
-  }
-  return `<table class="corr">
-    <tr><th>Average pain</th><th>Same day</th><th>Next day</th></tr>
-    ${rows.map(([label, ds]) => `<tr><td>${label}</td><td>${avg(ds, 0)}</td><td>${avg(ds, 1)}</td></tr>`).join('')}
-  </table>
-  <p class="muted small" style="margin:8px 0 0">Steps are split at your median for this period. Needs at least 2 days per cell; (d) is the number of days. More logging makes the pattern more reliable.</p>`;
-}
+bindTips('stepsChart');
 bindTips('exChart');
-bindTips('comboChart');
 
 document.querySelectorAll('#range button').forEach(b => b.addEventListener('click', () => {
   range = Number(b.dataset.r);

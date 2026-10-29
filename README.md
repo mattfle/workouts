@@ -25,11 +25,12 @@ A separate section in `knee/`, opened from the **Knee** card on the home screen 
 - Daily knee pain on an absolute scale from 0 (no pain) to 50 (can't do anything or bear weight), with described markers every 10 points (shown under the slider and in a tappable scale guide)
 - Daily exercise checklist: each exercise has default sets × reps (set via ⚙︎) that are prefilled when ticked; each day stores its own sets, reps and easiness (1–5), so changing the defaults later doesn't alter past days
 - Medicine timeline: courses with name, dose, start and stop dates; each day shows what you're taking (e.g. Naproxen · day 8)
+- Inflammation: tick a day as inflamed; it shows as a red dot on the pain lines
 - Ice: times iced per day for each knee (left / right)
 - Steps and a free-text note for each day
 - Tap the date to pick a day from a calendar (logged days are dotted, coloured by pain)
 - Goals list, where you mark the day each goal is realised
-- Progress charts (pain 0–50, steps, exercise reps per day stacked by exercise, and a pain-vs-activity view with a same-day / next-day pain comparison) over a week, 2 weeks, a month, 3 months or all time, plus a day-by-day log
+- Progress charts (pain 0–50, steps, exercise reps per day stacked by exercise; tap a day for details, and optionally show the pain line on top of the steps and exercise charts) over a week, 2 weeks, a month, 3 months or all time, plus a day-by-day log
 - Its own Export/Import backup, separate from the workouts one
 
 ## Put it on the iPhone
