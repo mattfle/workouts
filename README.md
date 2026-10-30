@@ -30,7 +30,7 @@ A separate section in `knee/`, opened from the **Knee** card on the home screen 
 - Steps and a free-text note for each day
 - Tap the date to pick a day from a calendar (logged days are dotted, coloured by pain)
 - Goals list, where you mark the day each goal is realised
-- Progress charts (pain 0–50, steps, exercise reps per day stacked by exercise; tap a day for details, and optionally show the pain line on top of the steps and exercise charts) over a week, 2 weeks, a month, 3 months or all time, plus a day-by-day log
+- Progress charts (pain 0–50, steps, exercise reps per day stacked by exercise; tap a day for details, optionally show the pain line (or the next day's pain) on top of the steps and exercise charts, and a combined steps + exercises + pain chart for comparing shapes) over a week, 2 weeks, a month, 3 months or all time, plus a day-by-day log
 - Its own Export/Import backup, separate from the workouts one
 
 ## Put it on the iPhone
