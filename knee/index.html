@@ -681,7 +681,7 @@ $('inflBtn').onclick = () => { setEntry(current, { inflamed: entry(current).infl
 // ---------- Knee response & step target ----------
 // Each day has three 0–10 scores, all stored on that day. "next" is how the knee feels
 // 24h later, so it gets backfilled the following day.
-// A day is only green once all three of its scores are green and it stayed within the max.
+// A day is only green once all three of its scores are green. Going over the max doesn't affect it.
 const RESP_PARTS = [['during', 'During exercise'], ['hour', '1 hour later'], ['next', 'Next day']];
 const ZONE_COLOR = { green: 'var(--better)', amber: 'var(--goal)', red: 'var(--worse)' };
 const STEP_START = 500, STEP_INC = 100, GREEN_RUN = 7, EX_DELAY = 4;
@@ -689,11 +689,11 @@ const respZone = v => v <= 2 ? 'green' : v <= 4 ? 'amber' : 'red';
 const respText = s => RESP_PARTS.map(([k]) => s[k] ?? '–').join(' · ');
 const respLogged = s => RESP_PARTS.filter(([k]) => typeof s[k] === 'number').length;
 // Worst result so far; null while it could still turn out green
-function dayZone(d, limit) {
+function dayZone(d) {
   const r = entry(d).resp || {};
   const zones = RESP_PARTS.filter(([k]) => typeof r[k] === 'number').map(([k]) => respZone(r[k]));
   if (zones.includes('red')) return 'red';
-  if (zones.includes('amber') || (entry(d).steps ?? 0) > limit) return 'amber';
+  if (zones.includes('amber')) return 'amber';
   return zones.length === RESP_PARTS.length ? 'green' : null;
 }
 // Replayed from the first response logged, so editing a past day recalculates everything.
@@ -721,7 +721,7 @@ function stepPlan() {
     }
     if (ex && ex !== 'done') ex = run >= EX_DELAY ? 'due' : 'waiting';
     if (ex === 'due' && db.exRaises.includes(d)) ex = 'done';
-    const zone = dayZone(d, limit);
+    const zone = dayZone(d);
     let ended = 0;
     if (zone === 'green') run++;
     else if (zone || d < open) { ended = rose ? GREEN_RUN : run; run = 0; }
@@ -758,7 +758,7 @@ function renderStepTarget() {
   const over = (entry(current).steps ?? 0) - limit, next = (limit + inc).toLocaleString();
   $('stepsMax').textContent = $('streakMax').textContent = `Max ${limit.toLocaleString()}`;
   $('stepsOver').classList.toggle('hidden', over <= 0);
-  $('stepsOver').innerHTML = `<span style="color:var(--worse);font-weight:600">${over.toLocaleString()} over the max, so this day can't be green</span>`;
+  $('stepsOver').innerHTML = `<span style="color:var(--worse);font-weight:600">${over.toLocaleString()} over the max</span>`;
   $('stepPips').innerHTML = Array.from({ length: GREEN_RUN }, (_, i) => `<i class="${i < run ? 'on' : ''}"></i>`).join('');
   $('pipLabels').innerHTML = (ex ? `<span style="grid-column:${EX_DELAY}">Exercises${ex === 'done' ? ' ✓' : ''}</span>` : '')
     + `<span style="grid-column:${GREEN_RUN}">Steps</span>`;
