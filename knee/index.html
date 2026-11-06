@@ -1149,7 +1149,7 @@ function renderProgress() {
   $('exChart').innerHTML = exUsed.length ? exChart(exDays, shiftOf('ex')) : `<div class="empty">No exercises logged in this period.</div>`;
   $('exLegend').innerHTML = exUsed.map(x => `<span>${swatch(exColor(x.id), x.recovery)}${esc(x.name)}</span>`).join('')
     + (exUsed.length && shiftOf('ex') != null ? painLegend(shiftOf('ex')) : '')
-    + (exDays.some(e => e.items.some(it => it.unit === 'sec')) ? `<span class="muted">Timed holds count 1 second as 1 rep.</span>` : '')
+    + (exDays.some(e => e.items.some(it => it.unit === 'sec')) ? `<span class="muted">Timed holds count 3 seconds as 1 rep.</span>` : '')
     + (exDays.some(e => e.items.some(it => it.recovery)) ? `<span class="muted">Recovery reps count as ¼ of a normal rep.</span>` : '');
   const allShift = overlay.allNext ? 1 : 0, anyData = painVals.length || stepVals.length || exUsed.length;
   $('allChart').innerHTML = anyData ? allChart(days, allShift) : `<div class="empty">Log pain, steps and exercises to see them together.</div>`;
@@ -1314,6 +1314,7 @@ document.querySelectorAll('[data-ov]').forEach(c => c.addEventListener('change',
 // Each exercise keeps one colour slot by its position in the list, so colours never shift between days or ranges.
 const exColor = id => { const i = db.exercises.findIndex(x => x.id === id); return i < 0 ? 'var(--muted)' : `var(--s${i % 8 + 1})`; };
 const RECOVERY_WEIGHT = .25; // a recovery rep counts as a quarter of a normal one
+const SECS_PER_REP = 3; // timed holds are converted to reps at about the length of a normal rep
 const isRecovery = id => !!db.exercises.find(x => x.id === id)?.recovery;
 const exDose = l => `${l.sets}×${l.reps}${l.unit === 'sec' ? 's' : ''}`;
 // Recovery bars are cross-hatched in the same colour instead of filled
@@ -1323,9 +1324,9 @@ const swatch = (color, hatch) => hatch ? `<span class="sw hatch" style="color:${
 const exOrder = id => { const i = db.exercises.findIndex(x => x.id === id); return i < 0 ? 999 : i; };
 function exItems(d) {
   return Object.entries(db.entries[d]?.ex || {})
-    .map(([id, l]) => { // timed holds: 1 second counts as 1 rep
-      const recovery = isRecovery(id);
-      return { id, ...l, recovery, total: Math.round(l.sets * l.reps * (recovery ? RECOVERY_WEIGHT : 1)) };
+    .map(([id, l]) => {
+      const recovery = isRecovery(id), reps = l.sets * l.reps / (l.unit === 'sec' ? SECS_PER_REP : 1);
+      return { id, ...l, recovery, total: Math.max(1, Math.round(reps * (recovery ? RECOVERY_WEIGHT : 1))) };
     })
     .sort((a, b) => exOrder(a.id) - exOrder(b.id));
 }
