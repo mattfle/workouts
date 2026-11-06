@@ -28,6 +28,7 @@
     --same: #6b6f76;
     --same-bg: #ecebe7;
     --goal: #c98a0b;
+    --amber-bg: #fbf0d9;
     --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
     --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
     --radius: 16px;
@@ -47,6 +48,7 @@
       --same: #a5a7ad;
       --same-bg: #2c2d31;
       --goal: #f0b440;
+      --amber-bg: #3d3118;
       --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
       --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
     }
@@ -148,6 +150,7 @@
   .link-btn { color: var(--accent); font-weight: 600; padding: 10px 0 0; font-size: 15px; }
   .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
   .field-row label, .sheet label { font-size: 13px; color: var(--muted); display: block; }
+  .sheet .ov { display: flex; font-size: 15px; color: var(--text); margin-top: 14px; }
   .sheet .btn-primary { width: 100%; padding: 14px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 600; margin-top: 14px; }
   .sheet .btn-danger { width: 100%; padding: 12px; color: var(--worse); font-weight: 600; margin-top: 4px; }
 
@@ -169,6 +172,25 @@
   /* Steps */
   .steps-row { display: flex; gap: 10px; align-items: center; }
   .steps-row input { font-size: 22px; font-weight: 600; }
+
+  .steps-hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .pips { display: flex; gap: 6px; }
+  .pips i { flex: 1; height: 8px; border-radius: 4px; background: var(--line); }
+  .pips i.on { background: var(--better); }
+
+  /* Knee response */
+  .resp { margin-top: 12px; }
+  .resp:first-child { margin-top: 2px; }
+  .resp-label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; margin-bottom: 6px; }
+  .resp-label small { color: var(--muted); font-size: 13px; }
+  .scale { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; }
+  .scale button { height: 38px; padding: 0; border-radius: 8px; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .z-green { background: var(--better-bg); color: var(--better); }
+  .z-amber { background: var(--amber-bg); color: var(--goal); }
+  .z-red { background: var(--worse-bg); color: var(--worse); }
+  .z-green.on { background: var(--better); color: var(--card); }
+  .z-amber.on { background: var(--goal); color: var(--card); }
+  .z-red.on { background: var(--worse); color: var(--card); }
 
   /* Saved toast */
   .saved { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(88px + env(safe-area-inset-bottom)); background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
@@ -198,6 +220,8 @@
   /* Charts */
   .range { display: flex; gap: 6px; margin-bottom: 10px; }
   .range button { flex: 1; white-space: nowrap; padding: 6px 4px; border-radius: 20px; background: var(--card); border: 1px solid var(--line); font-size: 14px; }
+  #range button { flex: 1 1 auto; padding: 6px 2px; font-size: 13px; }
+  @media (max-width: 340px) { #range { gap: 3px; } #range button { padding: 6px 1px; } }
   .range button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
   svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
   svg.chart text { fill: var(--muted); font-size: 10px; }
@@ -207,7 +231,10 @@
   .tip .r { display: flex; align-items: center; gap: 6px; color: var(--muted); line-height: 1.5; }
   .tip .r em { margin-left: auto; padding-left: 10px; font-style: normal; font-weight: 600; color: var(--text); white-space: nowrap; }
   .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+  .sw.hatch { box-shadow: inset 0 0 0 1px currentColor; background: repeating-linear-gradient(45deg, currentColor 0 1px, transparent 1px 3px), repeating-linear-gradient(-45deg, currentColor 0 1px, transparent 1px 3px); }
   .legend .sw { margin-right: 5px; vertical-align: -1px; }
+  .bar-day { transition: opacity .12s; }
+  .bar-day.on { opacity: 1; }
   .ov-row { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: -2px 0 10px; }
   .ov { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); width: fit-content; }
   .ov:has(input:disabled) { opacity: .45; }
@@ -246,6 +273,12 @@
     </div>
 
     <div class="card">
+      <h2>Green streak</h2>
+      <div class="pips" id="stepPips"></div>
+      <div class="steps-hint" id="stepNext"></div>
+    </div>
+
+    <div class="card">
       <h2>Knee pain</h2>
       <div class="stepper">
         <button id="painMinus" aria-label="Less pain">−</button>
@@ -264,6 +297,30 @@
     </div>
 
     <div class="card">
+      <div class="card-head"><h2>Exercises</h2><span class="muted small" id="exCount"></span></div>
+      <div id="exList"></div>
+      <button class="link-btn" id="exAdd">+ Add exercise</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Knee response (0–10)</h2><span id="respStatus"></span></div>
+      <div id="respList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Steps</h2><span class="muted small" id="stepsMax"></span></div>
+      <div class="steps-row">
+        <input id="steps" type="number" inputmode="numeric" pattern="[0-9]*" min="0" placeholder="0">
+      </div>
+      <div class="steps-hint hidden" id="stepsOver"></div>
+    </div>
+
+    <div class="card">
+      <h2>How does it feel?</h2>
+      <textarea id="note" placeholder="Stiff in the morning, better after walking…"></textarea>
+    </div>
+
+    <div class="card">
       <h2>Medicine</h2>
       <div id="medList"></div>
       <button class="link-btn" id="medAdd">+ Add medicine</button>
@@ -278,27 +335,9 @@
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>Exercises</h2><span class="muted small" id="exCount"></span></div>
-      <div id="exList"></div>
-      <button class="link-btn" id="exAdd">+ Add exercise</button>
-    </div>
-
-    <div class="card">
       <h2>Goals realised this day</h2>
       <div id="dayGoals"></div>
       <button class="goal-btn" id="realiseBtn">★ Realise a goal</button>
-    </div>
-
-    <div class="card">
-      <h2>Steps</h2>
-      <div class="steps-row">
-        <input id="steps" type="number" inputmode="numeric" pattern="[0-9]*" min="0" placeholder="0">
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>How does it feel?</h2>
-      <textarea id="note" placeholder="Stiff in the morning, better after walking…"></textarea>
     </div>
   </section>
 
@@ -308,6 +347,7 @@
     <div class="range" id="range">
       <button data-r="7">Week</button>
       <button data-r="14">2 weeks</button>
+      <button data-r="21">3 weeks</button>
       <button data-r="30">Month</button>
       <button data-r="90">3 months</button>
       <button data-r="0">All</button>
@@ -321,8 +361,14 @@
         <span><span class="sw" style="background:var(--s7);opacity:.5"></span>medicine</span>
         <span>❄ times iced</span>
         <span><span class="sw" style="background:var(--worse);border-radius:50%"></span>inflamed</span>
+        <span><span class="sw" style="background:var(--better);border-radius:50%"></span>green day</span>
         <span><span class="star">★</span> goal realised</span>
       </div>
+    </div>
+    <div class="card">
+      <h2>Green days in a row</h2>
+      <div class="chart-wrap" id="greenChart"></div>
+      <div class="legend" id="greenLegend"></div>
     </div>
     <div class="card">
       <h2>Steps</h2>
@@ -413,12 +459,17 @@
   <div class="backdrop" id="exBackdrop"></div>
   <div class="sheet">
     <h3 id="exSheetTitle">Exercise settings</h3>
-    <div class="muted small">These sets and reps are prefilled when you tick the exercise off. Days you've already logged keep what you did.</div>
+    <div class="muted small">These sets are prefilled when you tick the exercise off. Days you've already logged keep what you did.</div>
     <label style="margin-top:12px">Name<input id="exName" enterkeyhint="done"></label>
+    <div class="range" id="exUnit" style="margin:12px 0 0">
+      <button data-u="reps">Reps</button>
+      <button data-u="sec">Timed hold</button>
+    </div>
     <div class="field-row">
       <label>Sets<input id="exSets" type="number" inputmode="numeric" pattern="[0-9]*" min="1"></label>
-      <label>Reps<input id="exReps" type="number" inputmode="numeric" pattern="[0-9]*" min="1"></label>
+      <label><span id="exRepsLabel">Reps</span><input id="exReps" type="number" inputmode="numeric" pattern="[0-9]*" min="1"></label>
     </div>
+    <label class="ov"><input type="checkbox" id="exRecovery"> Recovery exercise</label>
     <button class="btn-primary" id="exSave">Save</button>
     <button class="btn-danger" id="exRemove">Remove exercise</button>
   </div>
@@ -463,6 +514,10 @@ function withDefaults(d) {
   if (!Array.isArray(d.exercises)) {
     d.exercises = DEFAULT_EXERCISES.map((name, i) => ({ id: 'ex' + i, name, sets: 3, reps: 10 }));
   }
+  // Added after launch, so existing data gets it too. Removing it only archives it, so it won't come back.
+  if (!d.exercises.some(x => x.id === 'quadHolds' || /quad hold/i.test(x.name))) {
+    d.exercises.push({ id: 'quadHolds', name: 'Quad holds', sets: 5, reps: 10, unit: 'sec', recovery: true });
+  }
   return d;
 }
 function load() {
@@ -473,7 +528,9 @@ function load() {
   return withDefaults({ entries: {}, goals: [] });
 }
 let db = load();
+let planMemo = null; // see stepPlan
 function save() {
+  planMemo = null;
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {}
   flashSaved();
 }
@@ -570,6 +627,8 @@ function renderToday() {
   $('iceR').textContent = ice.R || 0;
 
   renderExercises();
+  renderResp();
+  renderStepTarget();
 
   if (document.activeElement !== $('steps')) $('steps').value = e.steps ?? '';
   if (document.activeElement !== $('note')) $('note').value = e.note ?? '';
@@ -598,9 +657,87 @@ $('painGuide').addEventListener('click', e => {
 $('painClear').onclick = () => { setEntry(current, { pain: null }); renderToday(); };
 $('inflBtn').onclick = () => { setEntry(current, { inflamed: entry(current).inflamed ? null : true }); renderToday(); };
 
+// ---------- Knee response & step target ----------
+// Each day has three 0–10 scores, all stored on that day. "next" is how the knee feels
+// 24h later, so it gets backfilled the following day.
+// A day is only green once all three of its scores are green and it stayed within the max.
+const RESP_PARTS = [['during', 'During exercise'], ['hour', '1 hour later'], ['next', 'Next day']];
+const ZONE_COLOR = { green: 'var(--better)', amber: 'var(--goal)', red: 'var(--worse)' };
+const STEP_START = 500, STEP_INC = 100, GREEN_RUN = 7;
+const respZone = v => v <= 2 ? 'green' : v <= 4 ? 'amber' : 'red';
+const respText = s => RESP_PARTS.map(([k]) => s[k] ?? '–').join(' · ');
+const respLogged = s => RESP_PARTS.filter(([k]) => typeof s[k] === 'number').length;
+// Worst result so far; null while it could still turn out green
+function dayZone(d, limit) {
+  const r = entry(d).resp || {};
+  const zones = RESP_PARTS.filter(([k]) => typeof r[k] === 'number').map(([k]) => respZone(r[k]));
+  if (zones.includes('red')) return 'red';
+  if (zones.includes('amber') || (entry(d).steps ?? 0) > limit) return 'amber';
+  return zones.length === RESP_PARTS.length ? 'green' : null;
+}
+// Replayed from the first response logged, so editing a past day recalculates everything.
+// Any day that isn't green resets the run, including a missed one. Today and yesterday are
+// still open (yesterday's 24h score can go in today), so they only count once rated.
+// The new max starts the day after the 7th green day, and the run restarts from there.
+// ended is the length of the run a non-green day just broke.
+function stepPlan() {
+  const t = todayIso();
+  if (planMemo?.t === t) return planMemo.days;
+  const days = {}, open = addDays(t, -1);
+  const first = Object.keys(db.entries).filter(d => db.entries[d].resp).sort()[0];
+  let limit = STEP_START, run = 0;
+  if (first) for (let d = first; d <= t; d = addDays(d, 1)) {
+    const rose = run === GREEN_RUN;
+    if (rose) { limit += STEP_INC; run = 0; }
+    const zone = dayZone(d, limit);
+    let ended = 0;
+    if (zone === 'green') run++;
+    else if (zone || d < open) { ended = rose ? GREEN_RUN : run; run = 0; }
+    days[d] = { limit, run, zone, rose, ended };
+  }
+  planMemo = { t, days };
+  return days;
+}
+const weekday = d => parse(d).toLocaleDateString(undefined, { weekday: 'long' });
+function renderResp() {
+  const r = entry(current).resp || {}, zone = stepPlan()[current]?.zone, n = respLogged(r);
+  const prev = addDays(current, -1), pr = entry(prev).resp;
+  $('respStatus').innerHTML = zone ? `<span class="badge z-${zone}">${zone[0].toUpperCase() + zone.slice(1)} day</span>`
+    : `<span class="muted small">${n === 2 && typeof r.next !== 'number' ? '24h score pending' : `${n}/${RESP_PARTS.length} logged`}</span>`;
+  $('respList').innerHTML = RESP_PARTS.map(([k, label]) => `<div class="resp">
+    <div class="resp-label"><span>${label}</span>${k === 'next' ? `<small>${current === todayIso() ? 'Rate this tomorrow' : `24h after ${weekday(current)}`}</small>` : ''}</div>
+    <div class="scale">${[...Array(11).keys()].map(n =>
+      `<button class="z-${respZone(n)}${r[k] === n ? ' on' : ''}" data-resp="${k}" data-n="${n}" aria-label="${label}: ${n}">${n}</button>`).join('')}</div>
+  </div>`).join('') + (pr && typeof pr.next !== 'number'
+    ? `<button class="link-btn" data-resp-day="${prev}">Add ${weekday(prev)}'s 24h score ›</button>` : '');
+}
+$('respList').addEventListener('click', e => {
+  const day = e.target.closest('[data-resp-day]');
+  if (day) return goTo(day.dataset.respDay);
+  const b = e.target.closest('[data-resp]');
+  if (!b) return;
+  const r = Object.assign({}, entry(current).resp), k = b.dataset.resp, n = Number(b.dataset.n);
+  if (r[k] === n) delete r[k]; else r[k] = n; // tap again to clear
+  setEntry(current, { resp: Object.keys(r).length ? r : null });
+  renderToday();
+});
+function renderStepTarget() {
+  const { limit, run, rose } = stepPlan()[current] || { limit: STEP_START, run: 0 };
+  const over = (entry(current).steps ?? 0) - limit, next = (limit + STEP_INC).toLocaleString();
+  $('stepsMax').textContent = `Max ${limit.toLocaleString()}`;
+  $('stepsOver').classList.toggle('hidden', over <= 0);
+  $('stepsOver').innerHTML = `<span style="color:var(--worse);font-weight:600">${over.toLocaleString()} over the max, so this day can't be green</span>`;
+  $('stepPips').innerHTML = Array.from({ length: GREEN_RUN }, (_, i) => `<i class="${i < run ? 'on' : ''}"></i>`).join('');
+  $('stepNext').textContent = (rose ? `Max went up to ${limit.toLocaleString()}! ` : '') + (run === GREEN_RUN
+    ? `${GREEN_RUN} green days in a row. Max goes up to ${next} the next day.`
+    : `${run} of ${GREEN_RUN} green days in a row · ${GREEN_RUN - run} more to reach ${next}`);
+}
+
 // ---------- Exercises ----------
-// A day's log stores a snapshot { name, sets, reps, ease } per exercise id,
+// A day's log stores a snapshot { name, sets, reps, unit, ease } per exercise id,
 // so later changes to an exercise's settings never rewrite past days.
+// unit 'sec' means reps holds seconds per set. The recovery tag is read from the
+// exercise itself, so tagging one also re-shades the days already logged.
 // ---------- Medicine ----------
 const medsOn = d => db.meds.filter(m => m.start <= d && (!m.end || m.end >= d)).sort((a, b) => a.start.localeCompare(b.start));
 function renderMeds() {
@@ -670,17 +807,17 @@ function renderExercises() {
   $('exCount').textContent = shown.length ? `${done}/${shown.length} done` : '';
   $('exList').innerHTML = shown.length ? shown.map(x => {
     const l = log[x.id];
-    const sets = l ? l.sets : x.sets, reps = l ? l.reps : x.reps;
+    const dose = l || x;
     return `<div class="ex${l ? ' done' : ''}">
       <div class="ex-row">
         <button class="check" data-ex-toggle="${x.id}" aria-label="Done">✓</button>
-        <div class="t"><span>${esc(l ? l.name : x.name)}</span><small>${sets} sets × ${reps} reps${l && l.ease ? ` · easiness ${l.ease}/5` : ''}</small></div>
+        <div class="t"><span>${esc(l ? l.name : x.name)}</span><small>${dose.sets} sets × ${dose.reps} ${dose.unit === 'sec' ? 'sec' : 'reps'}${x.recovery ? ' · recovery' : ''}${l && l.ease ? ` · easiness ${l.ease}/5` : ''}</small></div>
         <button class="icon-btn" data-ex-settings="${x.id}" aria-label="Settings">⚙︎</button>
       </div>
       ${l ? `<div class="ex-detail">
         <div class="mini-row">
           <div class="mini">Sets <button data-ex-adj="${x.id}" data-f="sets" data-d="-1">−</button><b>${l.sets}</b><button data-ex-adj="${x.id}" data-f="sets" data-d="1">+</button></div>
-          <div class="mini">Reps <button data-ex-adj="${x.id}" data-f="reps" data-d="-1">−</button><b>${l.reps}</b><button data-ex-adj="${x.id}" data-f="reps" data-d="1">+</button></div>
+          <div class="mini">${l.unit === 'sec' ? 'Secs' : 'Reps'} <button data-ex-adj="${x.id}" data-f="reps" data-d="-1">−</button><b>${l.reps}</b><button data-ex-adj="${x.id}" data-f="reps" data-d="1">+</button></div>
         </div>
         <div class="ease"><span>Easiness</span>${[1, 2, 3, 4, 5].map(n =>
           `<button class="${l.ease === n ? 'on' : ''}" data-ex-ease="${x.id}" data-n="${n}">${n}</button>`).join('')}</div>
@@ -701,7 +838,7 @@ $('exList').addEventListener('click', e => {
   if (d.exToggle) updateExLog(log => {
     const x = db.exercises.find(x => x.id === d.exToggle);
     if (log[d.exToggle]) delete log[d.exToggle];
-    else log[d.exToggle] = { name: x.name, sets: x.sets, reps: x.reps };
+    else log[d.exToggle] = { name: x.name, sets: x.sets, reps: x.reps, unit: x.unit };
   });
   else if (d.exAdj) updateExLog(log => {
     const l = log[d.exAdj] = Object.assign({}, log[d.exAdj]);
@@ -715,7 +852,13 @@ $('exList').addEventListener('click', e => {
   else if (d.exSettings) openExSheet(d.exSettings);
 });
 
-let exEditing = null;
+let exEditing = null, exUnit = 'reps';
+function setExUnit(u) {
+  exUnit = u;
+  document.querySelectorAll('#exUnit button').forEach(b => b.classList.toggle('on', b.dataset.u === u));
+  $('exRepsLabel').textContent = u === 'sec' ? 'Seconds per set' : 'Reps';
+}
+$('exUnit').addEventListener('click', e => { const b = e.target.closest('[data-u]'); if (b) setExUnit(b.dataset.u); });
 function openExSheet(id) {
   const x = id && db.exercises.find(x => x.id === id);
   exEditing = x ? x.id : null;
@@ -723,6 +866,8 @@ function openExSheet(id) {
   $('exName').value = x ? x.name : '';
   $('exSets').value = x ? x.sets : 3;
   $('exReps').value = x ? x.reps : 10;
+  setExUnit(x?.unit || 'reps');
+  $('exRecovery').checked = !!x?.recovery;
   $('exRemove').classList.toggle('hidden', !x);
   $('exSheetWrap').classList.remove('hidden');
   if (!x) $('exName').focus();
@@ -735,9 +880,10 @@ $('exSave').onclick = () => {
   if (!name) { $('exName').focus(); return; }
   const sets = clampInt(Number($('exSets').value) || 1, 1, 999);
   const reps = clampInt(Number($('exReps').value) || 1, 1, 999);
+  const fields = { name, sets, reps, unit: exUnit === 'sec' ? 'sec' : undefined, recovery: $('exRecovery').checked || undefined };
   const x = db.exercises.find(x => x.id === exEditing);
-  if (x) Object.assign(x, { name, sets, reps });
-  else db.exercises.push({ id: uid(), name, sets, reps });
+  if (x) Object.assign(x, fields);
+  else db.exercises.push({ id: uid(), ...fields });
   save(); closeExSheet(); renderToday();
 };
 $('exRemove').onclick = () => {
@@ -751,6 +897,8 @@ $('steps').addEventListener('input', e => {
   const v = e.target.value.trim();
   const n = parseInt(v, 10);
   setEntry(current, { steps: v === '' || isNaN(n) ? null : Math.max(0, n) });
+  renderResp();
+  renderStepTarget();
 });
 let noteTimer;
 $('note').addEventListener('input', e => {
@@ -916,18 +1064,26 @@ function renderProgress() {
   });
   // null = no pain line; otherwise how many days ahead the pain is read from
   const shiftOf = k => overlay[k] ? (overlay[k + 'Next'] ? 1 : 0) : null;
-  $('stepsChart').innerHTML = stepVals.length ? stepsChart(steps, shiftOf('steps')) : `<div class="empty">No steps logged in this period.</div>`;
-  $('stepsLegend').innerHTML = stepVals.length && shiftOf('steps') != null ? painLegend(shiftOf('steps')) : '';
+  const plan = stepPlan();
+  const tracked = days.filter(d => plan[d]), runsEnded = tracked.map(d => plan[d].ended).filter(Boolean);
+  $('greenChart').innerHTML = tracked.length ? greenChart(days, plan) : `<div class="empty">Rate your knee response to see your green days.</div>`;
+  $('greenLegend').innerHTML = tracked.length ? `<span>${swatch('var(--better)')}green day</span><span>${swatch('var(--goal)')}amber</span><span>${swatch('var(--worse)')}red</span><span>${swatch('var(--muted)')}missed</span>
+    <span><span class="star">▲</span> new max</span>
+    <span class="muted">Longest run ${Math.max(...tracked.map(d => plan[d].run))} · current ${plan[t]?.run ?? 0}${runsEnded.length ? ` · runs ended after ${runsEnded.slice(-6).join(', ')} days` : ''}</span>` : '';
+  $('stepsChart').innerHTML = stepVals.length ? stepsChart(steps, shiftOf('steps'), plan) : `<div class="empty">No steps logged in this period.</div>`;
+  $('stepsLegend').innerHTML = (stepVals.length && days.some(d => plan[d]) ? `<span><span class="sw" style="background:var(--goal);height:3px"></span>max steps</span>` : '')
+    + (stepVals.length && shiftOf('steps') != null ? painLegend(shiftOf('steps')) : '');
 
   const exDays = days.map(d => ({ d, items: exItems(d) }));
   const exUsed = db.exercises.filter(x => exDays.some(e => e.items.some(it => it.id === x.id)));
   $('exChart').innerHTML = exUsed.length ? exChart(exDays, shiftOf('ex')) : `<div class="empty">No exercises logged in this period.</div>`;
-  $('exLegend').innerHTML = exUsed.map(x => `<span><span class="sw" style="background:${exColor(x.id)}"></span>${esc(x.name)}</span>`).join('')
-    + (exUsed.length && shiftOf('ex') != null ? painLegend(shiftOf('ex')) : '');
+  $('exLegend').innerHTML = exUsed.map(x => `<span>${swatch(exColor(x.id), x.recovery)}${esc(x.name)}</span>`).join('')
+    + (exUsed.length && shiftOf('ex') != null ? painLegend(shiftOf('ex')) : '')
+    + (exDays.some(e => e.items.some(it => it.unit === 'sec')) ? `<span class="muted">Timed holds count 1 second as 1 rep.</span>` : '');
   const allShift = overlay.allNext ? 1 : 0, anyData = painVals.length || stepVals.length || exUsed.length;
   $('allChart').innerHTML = anyData ? allChart(days, allShift) : `<div class="empty">Log pain, steps and exercises to see them together.</div>`;
   $('allLegend').innerHTML = anyData ? `<span><span class="sw" style="background:var(--accent);opacity:.5"></span>steps</span>
-    <span><span class="sw" style="background:var(--s2);opacity:.5"></span>exercise reps</span>${painLegend(allShift)}
+    <span><span class="sw" style="background:var(--s2);opacity:.5"></span>exercise reps</span>${exDays.some(e => e.items.some(it => it.recovery)) ? `<span>${swatch('var(--s2)', true)}recovery</span>` : ''}${painLegend(allShift)}
     <span class="muted">Steps (bottom) and reps (top) are each scaled to their highest day in this period, to compare shapes. Tap a day for the numbers.</span>` : '';
 
   // log list (newest first, all time)
@@ -941,8 +1097,8 @@ function renderProgress() {
     const ex = Object.values(e.ex || {});
     return `<button class="log-item" data-go="${d}">
       <div class="log-top"><strong>${fmtLong(d)}</strong>${badge}</div>
-      <div class="muted small">${[e.inflamed ? '<span style="color:var(--worse);font-weight:600">inflamed</span>' : '', e.steps != null ? `${e.steps.toLocaleString()} steps` : '',iceText(e.ice) ? `iced ${iceText(e.ice)}` : '', medsOn(d).map(m => esc(m.name)).join(', ')].filter(Boolean).join(' · ')}${(goalsByDay[d] || []).map(t => ` <span class="star">★</span> ${esc(t)}`).join('')}</div>
-      ${ex.length ? `<div class="muted small">✓ ${ex.map(x => `${esc(x.name)} ${x.sets}×${x.reps}${x.ease ? ` (${x.ease}/5)` : ''}`).join(' · ')}</div>` : ''}
+      <div class="muted small">${[e.inflamed ? '<span style="color:var(--worse);font-weight:600">inflamed</span>' : '', e.steps != null ? `${e.steps.toLocaleString()} steps` : '',e.resp ? `<span style="color:${ZONE_COLOR[stepPlan()[d]?.zone] || 'inherit'}">response ${respText(e.resp)}</span>` : '', iceText(e.ice) ? `iced ${iceText(e.ice)}` : '', medsOn(d).map(m => esc(m.name)).join(', ')].filter(Boolean).join(' · ')}${(goalsByDay[d] || []).map(t => ` <span class="star">★</span> ${esc(t)}`).join('')}</div>
+      ${ex.length ? `<div class="muted small">✓ ${ex.map(x => `${esc(x.name)} ${exDose(x)}${x.ease ? ` (${x.ease}/5)` : ''}`).join(' · ')}</div>` : ''}
       ${e.note ? `<div class="log-note">${esc(e.note)}</div>` : ''}
     </button>`;
   }).join('') : `<div class="empty">No entries yet.</div>`;
@@ -1010,10 +1166,10 @@ function painChart(pain, goals) {
   </svg>`;
 }
 
-function stepsChart(steps, shift) {
+function stepsChart(steps, shift, plan) {
   const overlay = shift != null;
   const H = 150, PT = 8, PB = 18;
-  const max = Math.max(...steps.map(s => s.y || 0), 1);
+  const max = Math.max(...steps.map(s => Math.max(s.y || 0, plan[s.d]?.limit || 0)), 1);
   const ticks = niceTicks(0, max);
   const hi = ticks[ticks.length - 1];
   const y = v => PT + (hi - v) / hi * (H - PT - PB);
@@ -1026,13 +1182,22 @@ function stepsChart(steps, shift) {
   const inset = bw / 2;
   const bx = i => n === 1 ? xScale(0, 1) : PL + inset + i * (W - PL - PR - 2 * inset) / (n - 1);
   const bars = steps.map((s, i) => s.y == null ? '' :
-    `<path d="${topRounded(bx(i) - bw / 2, y(s.y), bw, Math.max(1, y(0) - y(s.y)), 3)}" fill="var(--accent)" opacity="${overlay ? '.4' : '.75'}"/>`).join('');
+    `<g class="bar-day" data-bar="${i}" opacity="${overlay ? '.4' : '.75'}"><path d="${topRounded(bx(i) - bw / 2, y(s.y), bw, Math.max(1, y(0) - y(s.y)), 3)}" fill="var(--accent)"/></g>`).join('');
   const days = steps.map(s => s.d);
+  // The max as a stepped line, starting from the first day it applied
+  const limitPath = steps.map((s, i) => {
+    const l = plan[s.d]?.limit;
+    return l ? `${plan[steps[i - 1]?.d] ? 'L' : 'M'}${(bx(i) - bw / 2).toFixed(1)} ${y(l).toFixed(1)}L${(bx(i) + bw / 2).toFixed(1)} ${y(l).toFixed(1)}` : '';
+  }).join('');
+  const limitLine = limitPath ? `<path d="${limitPath}" fill="none" stroke="var(--goal)" stroke-width="2" stroke-linejoin="round"/>` : '';
   tipData.stepsChart = {
     x: steps.map((_, i) => bx(i)), vw: overlay ? W + OVR : W,
-    html: steps.map(s => `<b>${fmtLong(s.d)}</b>` + tipRow('Steps', s.y != null ? s.y.toLocaleString() : '–') + (overlay ? painTip(s.d, shift) : '')),
+    html: steps.map(s => `<b>${fmtLong(s.d)}</b>` + tipRow('Steps', s.y != null ? s.y.toLocaleString() : '–')
+      + (plan[s.d] ? tipRow('Max', plan[s.d].limit.toLocaleString(), 'var(--goal)') : '')
+      + (db.entries[s.d]?.resp ? tipRow('Response', respText(db.entries[s.d].resp), ZONE_COLOR[plan[s.d]?.zone]) : '')
+      + (overlay ? painTip(s.d, shift) : '')),
   };
-  return `<svg class="chart" viewBox="0 0 ${overlay ? W + OVR : W} ${H}" role="img" aria-label="Steps per day">${grid}${bars}${overlay ? painOverlay(days, bx, PT, H, PB, shift) : ''}${hitCols(n, 0, H - PB)}${xLabels(days, H)}</svg>`;
+  return `<svg class="chart" viewBox="0 0 ${overlay ? W + OVR : W} ${H}" role="img" aria-label="Steps per day">${grid}${bars}${limitLine}${overlay ? painOverlay(days, bx, PT, H, PB, shift) : ''}${hitCols(n, 0, H - PB)}${xLabels(days, H)}</svg>`;
 }
 
 // ---------- Pain on top of the bar charts (optional) ----------
@@ -1040,12 +1205,14 @@ const OVR = 24; // extra room on the right for the pain scale
 let overlay = {};
 try { overlay = JSON.parse(localStorage.getItem(KEY + '.overlay')) || {}; } catch (e) {}
 const painLegend = shift => `<span><span class="sw" style="background:var(--text);height:3px"></span>${shift ? "next day's pain" : 'pain'} (right scale, 0–50)</span>
-  <span><span class="sw" style="background:var(--worse);border-radius:50%"></span>inflamed</span>`;
-// Pain dot: red on inflamed days
+  <span><span class="sw" style="background:var(--worse);border-radius:50%"></span>inflamed</span>
+  <span><span class="sw" style="background:var(--better);border-radius:50%"></span>green day</span>`;
+// Pain dot: red on inflamed days, otherwise green on green days
 function painDot(x, y, d, n, color = 'var(--accent)') {
   const e = db.entries[d] || {}, label = `${fmtShort(d)}: ${typeof e.pain === 'number' ? e.pain : 'no pain score'}`;
-  return e.inflamed
-    ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${n > 45 ? 3.2 : 4.5}" fill="var(--worse)" stroke="var(--card)" stroke-width="1.5"><title>${label} · inflamed</title></circle>`
+  const solid = (fill, note) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${n > 45 ? 3.2 : 4.5}" fill="${fill}" stroke="var(--card)" stroke-width="1.5"><title>${label} · ${note}</title></circle>`;
+  return e.inflamed ? solid('var(--worse)', 'inflamed')
+    : stepPlan()[d]?.zone === 'green' ? solid('var(--better)', 'green day')
     : `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${n > 45 ? 2 : 3.2}" fill="var(--card)" stroke="${color}" stroke-width="2"><title>${label}</title></circle>`;
 }
 // Pain line on its own 0–50 scale, labelled on the right, drawn over the bars with a halo so it stays readable
@@ -1075,10 +1242,16 @@ document.querySelectorAll('[data-ov]').forEach(c => c.addEventListener('change',
 // ---------- Exercise & comparison charts ----------
 // Each exercise keeps one colour slot by its position in the list, so colours never shift between days or ranges.
 const exColor = id => { const i = db.exercises.findIndex(x => x.id === id); return i < 0 ? 'var(--muted)' : `var(--s${i % 8 + 1})`; };
+const isRecovery = id => !!db.exercises.find(x => x.id === id)?.recovery;
+const exDose = l => `${l.sets}×${l.reps}${l.unit === 'sec' ? 's' : ''}`;
+// Recovery bars are cross-hatched in the same colour instead of filled
+const hatchDef = (id, color) => `<pattern id="${id}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H4M0 0V4" stroke="${color}" stroke-width="1.5" fill="none"/></pattern>`;
+const hatchFill = (id, color) => `fill="url(#${id})" stroke="${color}" stroke-width=".75"`;
+const swatch = (color, hatch) => hatch ? `<span class="sw hatch" style="color:${color}"></span>` : `<span class="sw" style="background:${color}"></span>`;
 const exOrder = id => { const i = db.exercises.findIndex(x => x.id === id); return i < 0 ? 999 : i; };
 function exItems(d) {
   return Object.entries(db.entries[d]?.ex || {})
-    .map(([id, l]) => ({ id, ...l, total: l.sets * l.reps }))
+    .map(([id, l]) => ({ id, ...l, total: l.sets * l.reps, recovery: isRecovery(id) })) // timed holds: 1 second counts as 1 rep
     .sort((a, b) => exOrder(a.id) - exOrder(b.id));
 }
 const exTotal = items => items.reduce((a, it) => a + it.total, 0);
@@ -1094,12 +1267,15 @@ function hitCols(n, top, bottom) {
   return Array.from({ length: n }, (_, i) =>
     `<rect data-i="${i}" x="${(xScale(i, n) - step / 2).toFixed(1)}" y="${top}" width="${step.toFixed(1)}" height="${bottom - top}" fill="transparent"/>`).join('');
 }
-const tipRow = (label, value, color) => `<div class="r">${color ? `<span class="sw" style="background:${color}"></span>` : ''}${label}<em>${value}</em></div>`;
+const tipRow = (label, value, color, hatch) => `<div class="r">${color ? swatch(color, hatch) : ''}${label}<em>${value}</em></div>`;
 
 const tipData = {};
 function bindTips(id) {
   const wrap = $(id);
+  // The day being viewed goes back to full colour; the rest stay dulled
+  const mark = i => wrap.querySelectorAll('.bar-day').forEach(g => g.classList.toggle('on', g.dataset.bar === String(i)));
   const hide = () => {
+    mark(null);
     wrap.querySelector('.tip')?.remove();
     const xh = wrap.querySelector('.xh'); if (xh) xh.style.display = 'none';
   };
@@ -1108,14 +1284,19 @@ function bindTips(id) {
     const data = tipData[id];
     if (!t || !data) return hide();
     const i = Number(t.dataset.i);
+    mark(i);
     let tip = wrap.querySelector('.tip');
     if (!tip) { tip = document.createElement('div'); tip.className = 'tip'; wrap.appendChild(tip); }
     tip.innerHTML = data.html[i];
     const xh = wrap.querySelector('.xh');
     if (xh) { xh.setAttribute('x1', data.x[i]); xh.setAttribute('x2', data.x[i]); xh.style.display = ''; }
     const scale = wrap.querySelector('svg').getBoundingClientRect().width / (data.vw || W);
+    tip.style.left = 0;
     const x = data.x[i] * scale, tw = tip.offsetWidth, ww = wrap.clientWidth;
-    tip.style.left = Math.max(0, x + 14 + tw > ww ? x - tw - 14 : x + 14) + 'px';
+    // Beside the bar if it fits; otherwise below the chart, so the bar stays visible
+    const right = x + 14 + tw <= ww, left = x - tw - 14 >= 0;
+    tip.style.left = (right ? x + 14 : left ? x - tw - 14 : Math.max(0, Math.min(x - tw / 2, ww - tw))) + 'px';
+    tip.style.top = right || left ? '' : wrap.clientHeight + 'px';
   };
   wrap.addEventListener('pointerdown', show);
   wrap.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') show(e); });
@@ -1135,28 +1316,29 @@ function exChart(exDays, shift) {
     <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${fmtK(t)}</text>`).join('');
   const inset = bw / 2;
   const bx = i => n === 1 ? xScale(0, 1) : PL + inset + i * (W - PL - PR - 2 * inset) / (n - 1);
-  let bars = exDays.map((e, i) => {
+  const bars = exDays.map((e, i) => {
     let acc = 0;
-    return e.items.map((it, k) => {
+    return `<g class="bar-day" data-bar="${i}"${overlay ? ' opacity=".45"' : ''}>` + e.items.map((it, k) => {
       const y0 = y(acc), y1 = y(acc + it.total);
       acc += it.total;
       const gap = k ? 2 : 0; // 2px surface gap between stacked segments
       const h = Math.max(1, y0 - y1 - gap);
       const x = bx(i) - bw / 2;
+      const paint = it.recovery ? hatchFill(`hatch-${it.id}`, exColor(it.id)) : `fill="${exColor(it.id)}"`;
       return k === e.items.length - 1
-        ? `<path d="${topRounded(x, y1, bw, h, 3)}" fill="${exColor(it.id)}"/>`
-        : `<rect x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${exColor(it.id)}"/>`;
-    }).join('');
+        ? `<path d="${topRounded(x, y1, bw, h, 3)}" ${paint}/>`
+        : `<rect x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" ${paint}/>`;
+    }).join('') + '</g>';
   }).join('');
-  if (overlay) bars = `<g opacity=".45">${bars}</g>`;
+  const hatches = db.exercises.filter(x => x.recovery).map(x => hatchDef(`hatch-${x.id}`, exColor(x.id))).join('');
   tipData.exChart = {
     x: exDays.map((_, i) => bx(i)), vw: overlay ? W + OVR : W,
     html: exDays.map(e => `<b>${fmtLong(e.d)}</b>` + (overlay ? painTip(e.d, shift) : '') + (e.items.length
-      ? e.items.map(it => tipRow(esc(it.name), `${it.sets}×${it.reps}${it.ease ? ` · ${it.ease}/5` : ''}`, exColor(it.id))).join('')
+      ? e.items.map(it => tipRow(esc(it.name), `${exDose(it)}${it.ease ? ` · ${it.ease}/5` : ''}`, exColor(it.id), it.recovery)).join('')
         + tipRow('Total reps', exTotal(e.items))
       : `<div class="r">No exercises</div>`)),
   };
-  return `<svg class="chart" viewBox="0 0 ${overlay ? W + OVR : W} ${H}" role="img" aria-label="Exercise reps per day, stacked by exercise">${grid}${bars}${overlay ? painOverlay(exDays.map(e => e.d), bx, PT, H, PB, shift) : ''}${hitCols(n, 0, H - PB)}${xLabels(exDays.map(e => e.d), H)}</svg>`;
+  return `<svg class="chart" viewBox="0 0 ${overlay ? W + OVR : W} ${H}" role="img" aria-label="Exercise reps per day, stacked by exercise"><defs>${hatches}</defs>${grid}${bars}${overlay ? painOverlay(exDays.map(e => e.d), bx, PT, H, PB, shift) : ''}${hitCols(n, 0, H - PB)}${xLabels(exDays.map(e => e.d), H)}</svg>`;
 }
 // Steps, exercise reps and pain together. Steps and reps are each scaled to their own highest day
 // (only the shapes matter here); pain keeps its real 0–50 scale on the right.
@@ -1164,9 +1346,10 @@ function allChart(days, shift) {
   const H = 190, PT = 10, PB = 18, n = days.length;
   const steps = days.map(d => db.entries[d]?.steps ?? null);
   const reps = days.map(d => exTotal(exItems(d)));
+  const recReps = days.map(d => exTotal(exItems(d).filter(it => it.recovery)));
   const maxS = Math.max(1, ...steps.map(v => v || 0)), maxR = Math.max(1, ...reps);
     // one bar per day: steps at the bottom, exercise reps stacked on top (each as a share of its own highest day)
-  const sf = steps.map(v => v != null ? v / maxS : 0), rf = reps.map(v => v / maxR);
+  const sf = steps.map(v => v != null ? v / maxS : 0), rf = reps.map(v => v / maxR), hf = recReps.map(v => v / maxR);
   const top = Math.max(.01, ...sf.map((v, i) => v + rf[i]));
   const fy = f => PT + (1 - f / top) * (H - PT - PB);
   const bw = Math.max(2, Math.min(18, (W - PL - PR) / n - 2));
@@ -1174,16 +1357,18 @@ function allChart(days, shift) {
   const bx = i => n === 1 ? xScale(0, 1) : PL + inset + i * (W - PL - PR - 2 * inset) / (n - 1);
   const grid = [0, top].map(f => `<line x1="${PL}" x2="${W - PR}" y1="${fy(f)}" y2="${fy(f)}" stroke="var(--line)" ${f ? 'stroke-dasharray="2 3"' : ''}/>`).join('');
   const bars = days.map((_, i) => {
-    const x = bx(i) - bw / 2, s0 = fy(0), s1 = fy(sf[i]), r1 = fy(sf[i] + rf[i]);
-    const hasS = sf[i] > 0, hasR = rf[i] > 0;
-    const sPart = !hasS ? '' : hasR
+    const x = bx(i) - bw / 2, s0 = fy(0), s1 = fy(sf[i]), m1 = fy(sf[i] + rf[i] - hf[i]), r1 = fy(sf[i] + rf[i]);
+    const hasS = sf[i] > 0, hasR = rf[i] > hf[i], hasH = hf[i] > 0;
+    const sPart = !hasS ? '' : hasR || hasH
       ? `<rect x="${x.toFixed(1)}" y="${s1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, s0 - s1).toFixed(1)}" fill="var(--accent)"/>`
       : `<path d="${topRounded(x, s1, bw, Math.max(1, s0 - s1), 3)}" fill="var(--accent)"/>`;
     const gap = hasS ? 2 : 0; // 2px surface gap between the two parts
-    const rPart = hasR ? `<path d="${topRounded(x, r1, bw, Math.max(1, s1 - r1 - gap), 3)}" fill="var(--s2)"/>` : '';
-    return sPart + rPart;
+    const rPart = !hasR ? '' : hasH
+      ? `<rect x="${x.toFixed(1)}" y="${m1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, s1 - m1 - gap).toFixed(1)}" fill="var(--s2)"/>`
+      : `<path d="${topRounded(x, r1, bw, Math.max(1, s1 - r1 - gap), 3)}" fill="var(--s2)"/>`;
+    const hPart = hasH ? `<path d="${topRounded(x, r1, bw, Math.max(1, m1 - r1 - (hasS || hasR ? 2 : 0)), 3)}" ${hatchFill('hatch-all', 'var(--s2)')}/>` : '';
+    return `<g class="bar-day" data-bar="${i}" opacity=".5">${sPart}${rPart}${hPart}</g>`;
   }).join('');
-  const ex = `<g opacity=".5">${bars}</g>`;
   tipData.allChart = {
     x: days.map((_, i) => bx(i)), vw: W + OVR,
     html: days.map((d, i) => `<b>${fmtLong(d)}</b>`
@@ -1192,9 +1377,50 @@ function allChart(days, shift) {
       + painTip(d, shift)),
   };
   const crosshair = `<line class="xh" y1="${PT}" y2="${H - PB}" stroke="var(--text)" stroke-width="1" opacity=".35" style="display:none"/>`;
-  return `<svg class="chart" viewBox="0 0 ${W + OVR} ${H}" role="img" aria-label="Steps, exercise reps and pain per day">${grid}${ex}${crosshair}${painOverlay(days, bx, PT, H, PB, shift)}${hitCols(n, 0, H - PB)}${xLabels(days, H)}</svg>`;
+  return `<svg class="chart" viewBox="0 0 ${W + OVR} ${H}" role="img" aria-label="Steps, exercise reps and pain per day"><defs>${hatchDef('hatch-all', 'var(--s2)')}</defs>${grid}${bars}${crosshair}${painOverlay(days, bx, PT, H, PB, shift)}${hitCols(n, 0, H - PB)}${xLabels(days, H)}</svg>`;
 }
 
+// One bar per day, as tall as the run of green days so far, so a run climbs and drops to nothing where it failed.
+// Days that broke a run get a short coloured stub; days still waiting to be rated are left empty.
+function greenChart(days, plan) {
+  const H = 150, PT = 16, PB = 18, n = days.length, open = addDays(todayIso(), -1);
+  const y = v => PT + (GREEN_RUN - v) / GREEN_RUN * (H - PT - PB);
+  const bw = Math.max(2, Math.min(18, (W - PL - PR) / n - 2));
+  const inset = bw / 2;
+  const bx = i => n === 1 ? xScale(0, 1) : PL + inset + i * (W - PL - PR - 2 * inset) / (n - 1);
+  const grid = [0, 2, 4, 6].map(t => `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" ${t ? 'stroke-dasharray="2 3"' : ''}/>
+    <text x="${PL - 6}" y="${y(t) + 3}" text-anchor="end">${t}</text>`).join('');
+  const target = `<line x1="${PL}" x2="${W - PR}" y1="${y(GREEN_RUN)}" y2="${y(GREEN_RUN)}" stroke="var(--muted)" stroke-dasharray="5 3"/>
+    <text x="${PL - 6}" y="${y(GREEN_RUN) + 3}" text-anchor="end" style="fill:var(--text);font-weight:600">${GREEN_RUN}</text>`;
+  const missed = d => plan[d] && !plan[d].zone && d < open;
+  const bars = days.map((d, i) => {
+    const p = plan[d], x = bx(i) - bw / 2;
+    if (!p) return '';
+    const shape = p.zone === 'green' ? `<path d="${topRounded(x, y(p.run), bw, y(0) - y(p.run), 3)}" fill="var(--better)"/>`
+      : p.zone || missed(d) ? `<path d="${topRounded(x, y(0) - 5, bw, 5, 2)}" fill="${ZONE_COLOR[p.zone] || 'var(--muted)'}"/>` : '';
+    return shape && `<g class="bar-day" data-bar="${i}" opacity=".75">${shape}</g>`;
+  }).join('');
+  // The top of each climb, which is what moved the max up
+  const rises = days.map((d, i) => plan[d]?.run === GREEN_RUN
+    ? `<text x="${(bx(i) + bw / 2).toFixed(1)}" y="${y(GREEN_RUN) - 4}" text-anchor="end" style="fill:var(--goal);font-weight:600">▲${n > 31 ? '' : plan[d].limit + STEP_INC}</text>` : '').join('');
+  tipData.greenChart = {
+    x: days.map((_, i) => bx(i)),
+    html: days.map(d => {
+      const p = plan[d], e = db.entries[d] || {};
+      if (!p) return `<b>${fmtLong(d)}</b><div class="r">Not tracked yet</div>`;
+      return `<b>${fmtLong(d)}</b>`
+        + (p.zone === 'green' ? tipRow('Green run', `${p.run} of ${GREEN_RUN}`, 'var(--better)')
+          : p.zone ? tipRow(p.zone === 'red' ? 'Red day' : 'Amber day', '', ZONE_COLOR[p.zone])
+          : missed(d) ? tipRow('Missed', '', 'var(--muted)') : `<div class="r">Still to rate</div>`)
+        + (p.ended ? tipRow('Run ended after', `${p.ended} day${p.ended === 1 ? '' : 's'}`) : '')
+        + (e.resp ? tipRow('Response', respText(e.resp)) : '')
+        + ((e.steps ?? 0) > p.limit ? tipRow('Steps', `${e.steps.toLocaleString()} / ${p.limit.toLocaleString()}`) : '');
+    }),
+  };
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Green days in a row, per day">${grid}${target}${bars}${rises}${hitCols(n, 0, H - PB)}${xLabels(days, H)}</svg>`;
+}
+
+bindTips('greenChart');
 bindTips('stepsChart');
 bindTips('allChart');
 bindTips('exChart');
