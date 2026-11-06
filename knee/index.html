@@ -177,6 +177,9 @@
   .pips { display: flex; gap: 6px; }
   .pips i { flex: 1; height: 8px; border-radius: 4px; background: var(--line); }
   .pips i.on { background: var(--better); }
+  .pip-labels { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .pip-labels span { grid-row: 1; justify-self: end; white-space: nowrap; }
+  #exDue .chip { margin: 10px 0 0; font-size: 14px; }
 
   /* Knee response */
   .resp { margin-top: 12px; }
@@ -273,9 +276,11 @@
     </div>
 
     <div class="card">
-      <h2>Green streak</h2>
+      <div class="card-head"><h2>Green streak</h2><button class="icon-btn" id="maxEdit">Edit max</button></div>
       <div class="pips" id="stepPips"></div>
+      <div class="pip-labels" id="pipLabels"></div>
       <div class="steps-hint" id="stepNext"></div>
+      <div id="exDue"></div>
     </div>
 
     <div class="card">
@@ -475,6 +480,20 @@
   </div>
 </div>
 
+<div id="maxSheetWrap" class="hidden">
+  <div class="backdrop" id="maxBackdrop"></div>
+  <div class="sheet">
+    <h3>Edit max</h3>
+    <div class="muted small" id="maxSheetSub"></div>
+    <div class="field-row">
+      <label>Max steps<input id="maxLimit" type="number" inputmode="numeric" pattern="[0-9]*" min="1"></label>
+      <label>Increase by<input id="maxInc" type="number" inputmode="numeric" pattern="[0-9]*" min="1"></label>
+    </div>
+    <button class="btn-primary" id="maxSave">Save</button>
+    <button class="btn-danger" id="maxRemove">Remove this change</button>
+  </div>
+</div>
+
 <div id="calWrap" class="hidden">
   <div class="backdrop" id="calBackdrop"></div>
   <div class="sheet">
@@ -511,6 +530,8 @@ const KEY = 'kneeTracker.v1';
 const DEFAULT_EXERCISES = ['Double leg heel raises', 'Double leg glute bridges', 'Stand up from seated', 'Straight leg lifts'];
 function withDefaults(d) {
   if (!Array.isArray(d.meds)) d.meds = []; // medicine courses: { id, name, dose, start, end|null }
+  if (!Array.isArray(d.stepChanges)) d.stepChanges = []; // manual step max changes: { date, limit, inc }, at most one per date
+  if (!Array.isArray(d.exRaises)) d.exRaises = []; // dates the exercises were increased for a new level
   if (!Array.isArray(d.exercises)) {
     d.exercises = DEFAULT_EXERCISES.map((name, i) => ({ id: 'ex' + i, name, sets: 3, reps: 10 }));
   }
@@ -663,7 +684,7 @@ $('inflBtn').onclick = () => { setEntry(current, { inflamed: entry(current).infl
 // A day is only green once all three of its scores are green and it stayed within the max.
 const RESP_PARTS = [['during', 'During exercise'], ['hour', '1 hour later'], ['next', 'Next day']];
 const ZONE_COLOR = { green: 'var(--better)', amber: 'var(--goal)', red: 'var(--worse)' };
-const STEP_START = 500, STEP_INC = 100, GREEN_RUN = 7;
+const STEP_START = 500, STEP_INC = 100, GREEN_RUN = 7, EX_DELAY = 4;
 const respZone = v => v <= 2 ? 'green' : v <= 4 ? 'amber' : 'red';
 const respText = s => RESP_PARTS.map(([k]) => s[k] ?? '–').join(' · ');
 const respLogged = s => RESP_PARTS.filter(([k]) => typeof s[k] === 'number').length;
@@ -680,20 +701,31 @@ function dayZone(d, limit) {
 // still open (yesterday's 24h score can go in today), so they only count once rated.
 // The new max starts the day after the 7th green day, and the run restarts from there.
 // ended is the length of the run a non-green day just broke.
+// A manual change sets the max and increase from its date on, and the run restarts there.
+// Each raised max also staggers an exercise increase: ex is 'waiting' until EX_DELAY green days
+// at the new max are confirmed, then 'due' until marked done. It never touches the run.
 function stepPlan() {
   const t = todayIso();
   if (planMemo?.t === t) return planMemo.days;
   const days = {}, open = addDays(t, -1);
-  const first = Object.keys(db.entries).filter(d => db.entries[d].resp).sort()[0];
-  let limit = STEP_START, run = 0;
+  const changes = Object.fromEntries(db.stepChanges.map(c => [c.date, c]));
+  const first = [...Object.keys(db.entries).filter(d => db.entries[d].resp), ...Object.keys(changes)].sort()[0];
+  let limit = STEP_START, inc = STEP_INC, run = 0, ex = null;
   if (first) for (let d = first; d <= t; d = addDays(d, 1)) {
     const rose = run === GREEN_RUN;
-    if (rose) { limit += STEP_INC; run = 0; }
+    if (rose) { limit += inc; run = 0; ex = 'waiting'; }
+    if (changes[d]) {
+      if (changes[d].limit > limit) ex = 'waiting';
+      ({ limit, inc } = changes[d]);
+      run = 0;
+    }
+    if (ex && ex !== 'done') ex = run >= EX_DELAY ? 'due' : 'waiting';
+    if (ex === 'due' && db.exRaises.includes(d)) ex = 'done';
     const zone = dayZone(d, limit);
     let ended = 0;
     if (zone === 'green') run++;
     else if (zone || d < open) { ended = rose ? GREEN_RUN : run; run = 0; }
-    days[d] = { limit, run, zone, rose, ended };
+    days[d] = { limit, inc, run, zone, rose, ended, set: !!changes[d], ex };
   }
   planMemo = { t, days };
   return days;
@@ -722,16 +754,52 @@ $('respList').addEventListener('click', e => {
   renderToday();
 });
 function renderStepTarget() {
-  const { limit, run, rose } = stepPlan()[current] || { limit: STEP_START, run: 0 };
-  const over = (entry(current).steps ?? 0) - limit, next = (limit + STEP_INC).toLocaleString();
+  const { limit, inc, run, rose, ex } = stepPlan()[current] || { limit: STEP_START, inc: STEP_INC, run: 0 };
+  const over = (entry(current).steps ?? 0) - limit, next = (limit + inc).toLocaleString();
   $('stepsMax').textContent = `Max ${limit.toLocaleString()}`;
   $('stepsOver').classList.toggle('hidden', over <= 0);
   $('stepsOver').innerHTML = `<span style="color:var(--worse);font-weight:600">${over.toLocaleString()} over the max, so this day can't be green</span>`;
   $('stepPips').innerHTML = Array.from({ length: GREEN_RUN }, (_, i) => `<i class="${i < run ? 'on' : ''}"></i>`).join('');
+  $('pipLabels').innerHTML = (ex ? `<span style="grid-column:${EX_DELAY}">Exercises${ex === 'done' ? ' ✓' : ''}</span>` : '')
+    + `<span style="grid-column:${GREEN_RUN}">Steps</span>`;
+  $('exDue').innerHTML = ex === 'due'
+    ? `<div class="chip"><span class="t">${EX_DELAY} green days at ${limit.toLocaleString()} steps. Time to increase your exercises.</span><button class="icon-btn" data-ex-raise="on">Done</button></div>`
+    : db.exRaises.includes(current) ? `<div class="chip"><span class="t">Exercises increased</span><button class="icon-btn" data-ex-raise="off">Undo</button></div>` : '';
   $('stepNext').textContent = (rose ? `Max went up to ${limit.toLocaleString()}! ` : '') + (run === GREEN_RUN
     ? `${GREEN_RUN} green days in a row. Max goes up to ${next} the next day.`
     : `${run} of ${GREEN_RUN} green days in a row · ${GREEN_RUN - run} more to reach ${next}`);
 }
+
+$('exDue').addEventListener('click', e => {
+  const b = e.target.closest('[data-ex-raise]');
+  if (!b) return;
+  db.exRaises = db.exRaises.filter(d => d !== current);
+  if (b.dataset.exRaise === 'on') db.exRaises.push(current);
+  save(); renderToday();
+});
+function openMaxSheet() {
+  const { limit, inc } = stepPlan()[current] || { limit: STEP_START, inc: STEP_INC };
+  $('maxLimit').value = limit;
+  $('maxInc').value = inc;
+  $('maxSheetSub').textContent = `Applies from ${fmtLong(current)} onwards. Your green streak restarts at 0.`;
+  $('maxRemove').classList.toggle('hidden', !db.stepChanges.some(c => c.date === current));
+  $('maxSheetWrap').classList.remove('hidden');
+}
+function closeMaxSheet() { document.activeElement.blur(); $('maxSheetWrap').classList.add('hidden'); }
+$('maxEdit').onclick = openMaxSheet;
+$('maxBackdrop').onclick = closeMaxSheet;
+$('maxSave').onclick = () => {
+  const limit = Number($('maxLimit').value), inc = Number($('maxInc').value);
+  if (!(limit >= 1)) { $('maxLimit').focus(); return; }
+  if (!(inc >= 1)) { $('maxInc').focus(); return; }
+  db.stepChanges = db.stepChanges.filter(c => c.date !== current);
+  db.stepChanges.push({ date: current, limit: clampInt(limit, 1, 999999), inc: clampInt(inc, 1, 999999) });
+  save(); closeMaxSheet(); renderToday();
+};
+$('maxRemove').onclick = () => {
+  db.stepChanges = db.stepChanges.filter(c => c.date !== current);
+  save(); closeMaxSheet(); renderToday();
+};
 
 // ---------- Exercises ----------
 // A day's log stores a snapshot { name, sets, reps, unit, ease } per exercise id,
@@ -1069,6 +1137,7 @@ function renderProgress() {
   $('greenChart').innerHTML = tracked.length ? greenChart(days, plan) : `<div class="empty">Rate your knee response to see your green days.</div>`;
   $('greenLegend').innerHTML = tracked.length ? `<span>${swatch('var(--better)')}green day</span><span>${swatch('var(--goal)')}amber</span><span>${swatch('var(--worse)')}red</span><span>${swatch('var(--muted)')}missed</span>
     <span><span class="star">▲</span> new max</span>
+    <span><span style="color:var(--accent)">◆</span> exercises up</span>
     <span class="muted">Longest run ${Math.max(...tracked.map(d => plan[d].run))} · current ${plan[t]?.run ?? 0}${runsEnded.length ? ` · runs ended after ${runsEnded.slice(-6).join(', ')} days` : ''}</span>` : '';
   $('stepsChart').innerHTML = stepVals.length ? stepsChart(steps, shiftOf('steps'), plan) : `<div class="empty">No steps logged in this period.</div>`;
   $('stepsLegend').innerHTML = (stepVals.length && days.some(d => plan[d]) ? `<span><span class="sw" style="background:var(--goal);height:3px"></span>max steps</span>` : '')
@@ -1400,9 +1469,11 @@ function greenChart(days, plan) {
       : p.zone || missed(d) ? `<path d="${topRounded(x, y(0) - 5, bw, 5, 2)}" fill="${ZONE_COLOR[p.zone] || 'var(--muted)'}"/>` : '';
     return shape && `<g class="bar-day" data-bar="${i}" opacity=".75">${shape}</g>`;
   }).join('');
-  // The top of each climb, which is what moved the max up
-  const rises = days.map((d, i) => plan[d]?.run === GREEN_RUN
-    ? `<text x="${(bx(i) + bw / 2).toFixed(1)}" y="${y(GREEN_RUN) - 4}" text-anchor="end" style="fill:var(--goal);font-weight:600">▲${n > 31 ? '' : plan[d].limit + STEP_INC}</text>` : '').join('');
+  // The end of each climb: the 7th green day, or the day before a manual change
+  const rises = days.map((d, i) => plan[d] && (plan[d].run === GREEN_RUN || plan[addDays(d, 1)]?.set)
+    ? `<text x="${(bx(i) + bw / 2).toFixed(1)}" y="${y(plan[d].run) - 4}" text-anchor="end" style="fill:var(--goal);font-weight:600">▲${n > 31 ? '' : plan[addDays(d, 1)]?.limit ?? plan[d].limit + plan[d].inc}</text>` : '').join('');
+  const exMarks = days.map((d, i) => plan[d] && db.exRaises.includes(d)
+    ? `<text x="${bx(i).toFixed(1)}" y="${y(plan[d].run) - 4}" text-anchor="middle" style="fill:var(--accent)">◆</text>` : '').join('');
   tipData.greenChart = {
     x: days.map((_, i) => bx(i)),
     html: days.map(d => {
@@ -1412,12 +1483,13 @@ function greenChart(days, plan) {
         + (p.zone === 'green' ? tipRow('Green run', `${p.run} of ${GREEN_RUN}`, 'var(--better)')
           : p.zone ? tipRow(p.zone === 'red' ? 'Red day' : 'Amber day', '', ZONE_COLOR[p.zone])
           : missed(d) ? tipRow('Missed', '', 'var(--muted)') : `<div class="r">Still to rate</div>`)
+        + (db.exRaises.includes(d) ? `<div class="r">Exercises increased</div>` : '')
         + (p.ended ? tipRow('Run ended after', `${p.ended} day${p.ended === 1 ? '' : 's'}`) : '')
         + (e.resp ? tipRow('Response', respText(e.resp)) : '')
         + ((e.steps ?? 0) > p.limit ? tipRow('Steps', `${e.steps.toLocaleString()} / ${p.limit.toLocaleString()}`) : '');
     }),
   };
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Green days in a row, per day">${grid}${target}${bars}${rises}${hitCols(n, 0, H - PB)}${xLabels(days, H)}</svg>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Green days in a row, per day">${grid}${target}${bars}${rises}${exMarks}${hitCols(n, 0, H - PB)}${xLabels(days, H)}</svg>`;
 }
 
 bindTips('greenChart');
