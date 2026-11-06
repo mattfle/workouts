@@ -276,7 +276,7 @@
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>Green streak</h2><button class="icon-btn" id="maxEdit">Edit max</button></div>
+      <div class="card-head"><h2>Green streak</h2><span><b id="streakMax"></b><button class="icon-btn" id="maxEdit">Edit</button></span></div>
       <div class="pips" id="stepPips"></div>
       <div class="pip-labels" id="pipLabels"></div>
       <div class="steps-hint" id="stepNext"></div>
@@ -756,7 +756,7 @@ $('respList').addEventListener('click', e => {
 function renderStepTarget() {
   const { limit, inc, run, rose, ex } = stepPlan()[current] || { limit: STEP_START, inc: STEP_INC, run: 0 };
   const over = (entry(current).steps ?? 0) - limit, next = (limit + inc).toLocaleString();
-  $('stepsMax').textContent = `Max ${limit.toLocaleString()}`;
+  $('stepsMax').textContent = $('streakMax').textContent = `Max ${limit.toLocaleString()}`;
   $('stepsOver').classList.toggle('hidden', over <= 0);
   $('stepsOver').innerHTML = `<span style="color:var(--worse);font-weight:600">${over.toLocaleString()} over the max, so this day can't be green</span>`;
   $('stepPips').innerHTML = Array.from({ length: GREEN_RUN }, (_, i) => `<i class="${i < run ? 'on' : ''}"></i>`).join('');
