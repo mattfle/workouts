@@ -177,6 +177,7 @@
   .pips { display: flex; gap: 6px; }
   .pips i { flex: 1; height: 8px; border-radius: 4px; background: var(--line); }
   .pips i.on { background: var(--better); }
+  .pips i.amber { background: var(--goal); }
   .pip-labels { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 4px; font-size: 12px; color: var(--muted); }
   .pip-labels span { grid-row: 1; justify-self: end; white-space: nowrap; }
   #exDue .chip { margin: 10px 0 0; font-size: 14px; }
@@ -366,7 +367,6 @@
         <span><span class="sw" style="background:var(--s7);opacity:.5"></span>medicine</span>
         <span>❄ times iced</span>
         <span><span class="sw" style="background:var(--worse);border-radius:50%"></span>inflamed</span>
-        <span><span class="sw" style="background:var(--better);border-radius:50%"></span>green day</span>
         <span><span class="star">★</span> goal realised</span>
       </div>
     </div>
@@ -698,7 +698,9 @@ function dayZone(d) {
   return zones.length === RESP_PARTS.length ? 'green' : null;
 }
 // Replayed from the first response logged, so editing a past day recalculates everything.
-// Any day that isn't green resets the run, including a missed one. Today and yesterday are
+// A red or missed day resets the run. An amber day doesn't count but doesn't reset either, so the
+// run takes a day longer (7 becomes 8); a second amber in a row resets it from the next day, so it
+// still shows in that day's run. Today and yesterday are
 // still open (yesterday's 24h score can go in today), so they only count once rated.
 // The new max starts the day after the 7th green day, and the run restarts from there.
 // ended is the length of the run a non-green day just broke.
@@ -711,22 +713,27 @@ function stepPlan() {
   const days = {}, open = addDays(t, -1);
   const changes = Object.fromEntries(db.stepChanges.map(c => [c.date, c]));
   const first = [...Object.keys(db.entries).filter(d => db.entries[d].resp), ...Object.keys(changes)].sort()[0];
-  let limit = STEP_START, inc = STEP_INC, run = 0, ex = null;
+  // seq is the current run's days, 'g' green or 'a' amber
+  let limit = STEP_START, inc = STEP_INC, run = 0, seq = '', prevAmber = false, restart = false, ex = null;
   if (first) for (let d = first; d <= t; d = addDays(d, 1)) {
+    if (restart) { run = 0; seq = ''; restart = false; }
     const rose = run === GREEN_RUN;
-    if (rose) { limit += inc; run = 0; ex = 'waiting'; }
+    if (rose) { limit += inc; run = 0; seq = ''; ex = 'waiting'; }
     if (changes[d]) {
       if (changes[d].limit > limit) ex = 'waiting';
       ({ limit, inc } = changes[d]);
-      run = 0;
+      run = 0; seq = '';
     }
     if (ex && ex !== 'done') ex = run >= EX_DELAY ? 'due' : 'waiting';
     if (ex === 'due' && db.exRaises.includes(d)) ex = 'done';
     const zone = dayZone(d);
-    let ended = 0;
-    if (zone === 'green') run++;
-    else if (zone || d < open) { ended = rose ? GREEN_RUN : run; run = 0; }
-    days[d] = { limit, inc, run, zone, rose, ended, set: !!changes[d], ex };
+    let ended = 0, extra = false;
+    if (zone === 'green') { run++; seq += 'g'; }
+    else if (zone === 'amber' && !prevAmber) { seq += 'a'; extra = true; }
+    else if (zone === 'amber') { ended = rose ? GREEN_RUN : run; seq += 'a'; restart = true; }
+    else if (zone || d < open) { ended = rose ? GREEN_RUN : run; run = 0; seq = ''; }
+    prevAmber = zone === 'amber';
+    days[d] = { limit, inc, run, seq, zone, extra, rose, ended, set: !!changes[d], ex };
   }
   planMemo = { t, days };
   return days;
@@ -755,20 +762,27 @@ $('respList').addEventListener('click', e => {
   renderToday();
 });
 function renderStepTarget() {
-  const { limit, inc, run, rose, ex } = stepPlan()[current] || { limit: STEP_START, inc: STEP_INC, run: 0 };
+  const { limit, inc, run, seq = '', zone, extra, rose, ex } = stepPlan()[current] || { limit: STEP_START, inc: STEP_INC, run: 0 };
+  const ambers = seq.split('a').length - 1, len = GREEN_RUN + ambers;
+  // the exercises mark sits on the EX_DELAY-th green day, wherever ambers push it
+  const exCol = ((seq.match(new RegExp(`^(?:a*g){${EX_DELAY}}`)) || [])[0]?.length) ?? EX_DELAY + ambers;
   const over = (entry(current).steps ?? 0) - limit, next = (limit + inc).toLocaleString();
   $('stepsMax').textContent = $('streakMax').textContent = `Max ${limit.toLocaleString()}`;
   $('stepsOver').classList.toggle('hidden', over <= 0);
   $('stepsOver').innerHTML = `<span style="color:var(--worse);font-weight:600">${over.toLocaleString()} over the max</span>`;
-  $('stepPips').innerHTML = Array.from({ length: GREEN_RUN }, (_, i) => `<i class="${i < run ? 'on' : ''}"></i>`).join('');
-  $('pipLabels').innerHTML = (ex ? `<span style="grid-column:${EX_DELAY}">Exercises${ex === 'done' ? ' ✓' : ''}</span>` : '')
-    + `<span style="grid-column:${GREEN_RUN}">Steps</span>`;
+  $('stepPips').innerHTML = Array.from({ length: len }, (_, i) => `<i class="${seq[i] === 'g' ? 'on' : seq[i] === 'a' ? 'amber' : ''}"></i>`).join('');
+  $('pipLabels').style.gridTemplateColumns = `repeat(${len}, 1fr)`;
+  $('pipLabels').innerHTML = (ex ? `<span style="grid-column:${exCol}">Exercises${ex === 'done' ? ' ✓' : ''}</span>` : '')
+    + `<span style="grid-column:${len}">Steps</span>`;
   $('exDue').innerHTML = ex === 'due'
     ? `<div class="chip"><span class="t">${EX_DELAY} green days at ${limit.toLocaleString()} steps. Time to increase your exercises.</span><button class="icon-btn" data-ex-raise="on">Done</button></div>`
     : db.exRaises.includes(current) ? `<div class="chip"><span class="t">Exercises increased</span><button class="icon-btn" data-ex-raise="off">Undo</button></div>` : '';
-  $('stepNext').textContent = (rose ? `Max went up to ${limit.toLocaleString()}! ` : '') + (run === GREEN_RUN
-    ? `${GREEN_RUN} green days in a row. Max goes up to ${next} the next day.`
-    : `${run} of ${GREEN_RUN} green days in a row · ${GREEN_RUN - run} more to reach ${next}`);
+  $('stepNext').textContent = (rose ? `Max went up to ${limit.toLocaleString()}! ` : '')
+    + (extra ? 'Amber day, so the run takes one more day. ' : '') + (zone === 'amber' && !extra
+    ? 'Two amber days in a row, so the run starts again from 0 tomorrow.'
+    : run === GREEN_RUN
+    ? `${GREEN_RUN} green days. Max goes up to ${next} the next day.`
+    : `${run} of ${GREEN_RUN} green days${ambers ? ` (+${ambers} amber)` : ''} · ${GREEN_RUN - run} more to reach ${next}`);
 }
 
 $('exDue').addEventListener('click', e => {
@@ -1203,8 +1217,8 @@ function painChart(pain, goals) {
   const pts = pain.map((p, i) => p.y == null ? null : [xScale(i, n), y(p.y), p]).filter(Boolean);
   const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
   const area = pts.length > 1 ? `${path} L${pts[pts.length - 1][0].toFixed(1)} ${y(0)} L${pts[0][0].toFixed(1)} ${y(0)} Z` : '';
-  const dots = pts.map(([x, py, p]) => painDot(x, py, p.d, n)).join('')
-    + pain.map((p, i) => p.y == null && db.entries[p.d]?.inflamed ? painDot(xScale(i, n), y(0), p.d, n) : '').join('');
+  const dots = pts.map(([x, py, p]) => painDot(x, py, p.d, n, undefined, false)).join('')
+    + pain.map((p, i) => p.y == null && db.entries[p.d]?.inflamed ? painDot(xScale(i, n), y(0), p.d, n, undefined, false) : '').join('');
   // Medicine: a light band over each course's days, with its name on a thin lane at the top
   const half = n > 1 ? (xScale(1, n) - xScale(0, n)) / 2 : 6;
   const first = pain[0].d, last = pain[n - 1].d;
@@ -1278,12 +1292,12 @@ try { overlay = JSON.parse(localStorage.getItem(KEY + '.overlay')) || {}; } catc
 const painLegend = shift => `<span><span class="sw" style="background:var(--text);height:3px"></span>${shift ? "next day's pain" : 'pain'} (right scale, 0–50)</span>
   <span><span class="sw" style="background:var(--worse);border-radius:50%"></span>inflamed</span>
   <span><span class="sw" style="background:var(--better);border-radius:50%"></span>green day</span>`;
-// Pain dot: red on inflamed days, otherwise green on green days
-function painDot(x, y, d, n, color = 'var(--accent)') {
+// Pain dot: red on inflamed days, otherwise green on green days (unless green is false)
+function painDot(x, y, d, n, color = 'var(--accent)', green = true) {
   const e = db.entries[d] || {}, label = `${fmtShort(d)}: ${typeof e.pain === 'number' ? e.pain : 'no pain score'}`;
   const solid = (fill, note) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${n > 45 ? 3.2 : 4.5}" fill="${fill}" stroke="var(--card)" stroke-width="1.5"><title>${label} · ${note}</title></circle>`;
   return e.inflamed ? solid('var(--worse)', 'inflamed')
-    : stepPlan()[d]?.zone === 'green' ? solid('var(--better)', 'green day')
+    : green && stepPlan()[d]?.zone === 'green' ? solid('var(--better)', 'green day')
     : `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${n > 45 ? 2 : 3.2}" fill="var(--card)" stroke="${color}" stroke-width="2"><title>${label}</title></circle>`;
 }
 // Pain line on its own 0–50 scale, labelled on the right, drawn over the bars with a halo so it stays readable
@@ -1472,7 +1486,7 @@ function greenChart(days, plan) {
   const bars = days.map((d, i) => {
     const p = plan[d], x = bx(i) - bw / 2;
     if (!p) return '';
-    const shape = p.zone === 'green' ? `<path d="${topRounded(x, y(p.run), bw, y(0) - y(p.run), 3)}" fill="var(--better)"/>`
+    const shape = p.zone === 'green' || (p.extra && p.run) ? `<path d="${topRounded(x, y(p.run), bw, y(0) - y(p.run), 3)}" fill="${ZONE_COLOR[p.zone]}"/>`
       : p.zone || missed(d) ? `<path d="${topRounded(x, y(0) - 5, bw, 5, 2)}" fill="${ZONE_COLOR[p.zone] || 'var(--muted)'}"/>` : '';
     return shape && `<g class="bar-day" data-bar="${i}" opacity=".75">${shape}</g>`;
   }).join('');
@@ -1488,7 +1502,8 @@ function greenChart(days, plan) {
       if (!p) return `<b>${fmtLong(d)}</b><div class="r">Not tracked yet</div>`;
       return `<b>${fmtLong(d)}</b>`
         + (p.zone === 'green' ? tipRow('Green run', `${p.run} of ${GREEN_RUN}`, 'var(--better)')
-          : p.zone ? tipRow(p.zone === 'red' ? 'Red day' : 'Amber day', '', ZONE_COLOR[p.zone])
+          : p.extra ? tipRow('Amber day', `+1 day · run ${p.run} of ${GREEN_RUN}`, ZONE_COLOR.amber)
+          : p.zone ? tipRow(p.zone === 'red' ? 'Red day' : 'Second amber day', '', ZONE_COLOR[p.zone])
           : missed(d) ? tipRow('Missed', '', 'var(--muted)') : `<div class="r">Still to rate</div>`)
         + (db.exRaises.includes(d) ? `<div class="r">Exercises increased</div>` : '')
         + (p.ended ? tipRow('Run ended after', `${p.ended} day${p.ended === 1 ? '' : 's'}`) : '')
