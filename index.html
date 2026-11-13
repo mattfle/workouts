@@ -378,6 +378,8 @@
 
   // ---------- domain logic ----------
   const findEx = id => state.exercises.find(e => e.id === id);
+  // ex.only = 'iso' or 'dyn' hides the other type for exercises that don't have it (its history is kept)
+  const kindsOf = ex => ex.only ? [ex.only] : ['iso', 'dyn'];
   const dayEntry = sec => sec.history.find(h => h.date === ui.day);
 
   function toggleDone(ex, kind) {
@@ -469,7 +471,7 @@
     if (!d || !d.entries) return 'Log pain, exercises, steps and goals';
     const last = Object.keys(d.entries).filter(k => typeof d.entries[k].pain === 'number').sort().pop();
     const today = d.entries[todayStr()] || {};
-    const exDone = Object.keys(today.ex || {}).length;
+    const exDone = Object.values(today.ex || {}).filter(l => !(l.target && l.sets < l.target)).length; // sets still being logged one by one don't count yet
     const pain = typeof today.pain === 'number' ? `Pain ${today.pain}/50 today`
       : last ? `Pain ${d.entries[last].pain}/50 last logged` : 'Pain not logged yet';
     return `${pain} · ${exDone ? `${exDone} exercise${exDone === 1 ? '' : 's'} done ✓` : 'no exercises yet today'}`;
@@ -529,7 +531,7 @@
         <a class="ex-head" href="#/ex/${ex.id}">
           <span class="ex-name">${esc(ex.name)}</span><span class="chev">›</span>
         </a>
-        ${['iso', 'dyn'].map(kind => `
+        ${kindsOf(ex).map(kind => `
           <div class="line">
             <span class="tag">${KINDS[kind].tag}</span>
             <span class="grow cfg">${cfgText(ex, kind)}</span>
@@ -669,6 +671,7 @@
   }
 
   function renderExercise(ex) {
+    if (ex.only) ui.tab = ex.only;
     const kind = ui.tab, k = KINDS[kind], sec = ex[kind];
     const done = !!dayEntry(sec);
     const feel = dayEntry(sec)?.feel ?? null;
@@ -685,9 +688,9 @@
       ${backLink('#/arms', 'Arms')}
       <h1>${esc(ex.name)}</h1>
 
-      <div class="seg tabs" role="tablist">
+      ${ex.only ? '' : `<div class="seg tabs" role="tablist">
         ${['iso', 'dyn'].map(kk => `<button data-act="tab" data-kind="${kk}" aria-pressed="${kk === kind}">${KINDS[kk].label}${dayEntry(ex[kk]) ? '<span class="dot" aria-label="done today"></span>' : ''}</button>`).join('')}
-      </div>
+      </div>`}
 
       <h2>${ui.day === todayStr() ? 'Today' : fmtLong(ui.day)}</h2>
       <div class="card">
@@ -770,6 +773,12 @@
         <div class="field">
           <label for="f-assisted">Assisted machine<div class="small muted">Lower weight = progress</div></label>
           <span class="switch"><input type="checkbox" id="f-assisted" ${ex.assisted ? 'checked' : ''}><span></span></span>
+        </div>
+        <div class="field">
+          <label>Types<div class="small muted">Hide the one this exercise doesn't have</div></label>
+          <div class="seg" style="width:168px">
+            ${[['', 'Both'], ['iso', 'Iso'], ['dyn', 'Dyn']].map(([v, l]) => `<button data-act="only" data-v="${v}" aria-pressed="${(ex.only || '') === v}">${l}</button>`).join('')}
+          </div>
         </div>
       </div>
       <button class="btn danger" data-act="delete-ex">Delete exercise</button>
@@ -1039,6 +1048,7 @@
       case 'week': state.cycle[+b.dataset.i].done = !state.cycle[+b.dataset.i].done; break;
       case 'new-cycle': state.cycle.forEach(w => { w.done = false; }); break;
       case 'tab': ui.tab = b.dataset.kind; return render();
+      case 'only': if (b.dataset.v) ex.only = b.dataset.v; else delete ex.only; break;
       case 'metric': ui.metric[ui.tab] = b.dataset.m; return render();
       case 'feel': setFeel(ex, ui.tab, +b.dataset.v); break;
       case 'unit': setConfig(ex, ui.tab, 'unit', b.dataset.u); break;
