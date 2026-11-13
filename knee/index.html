@@ -132,6 +132,9 @@
   .ex-row .t small { display: block; color: var(--muted); font-size: 13px; }
   .check { width: 34px; height: 34px; flex: none; border-radius: 10px; border: 2px solid var(--line); color: transparent; font-weight: 700; font-size: 18px; }
   .ex.done .check { background: var(--better); border-color: var(--better); color: #fff; }
+  .ex.partial .check { border-color: var(--goal); }
+  .set-btn { flex: none; padding: 6px 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); font-size: 14px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+  .set-btn b { color: var(--text); font-variant-numeric: tabular-nums; }
   .ex-detail { margin: 10px 0 2px 46px; display: grid; gap: 10px; }
   .mini-row { display: flex; gap: 16px; flex-wrap: wrap; }
   .mini { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
@@ -362,9 +365,9 @@
     <div class="stats" id="stats"></div>
     <div class="card">
       <h2>Knee pain (0–50)</h2>
-      <div id="painChart"></div>
+      <div class="chart-wrap" id="painChart"></div>
       <div class="legend">
-        <span>0 = no pain · 50 = can't bear weight</span>
+        <span>0 = 10,000 steps without pain · 50 = can't bear weight · Tap a day for details</span>
         <span><span class="sw" style="background:var(--s7);opacity:.5"></span>medicine</span>
         <span>❄ times iced</span>
         <span><span class="sw" style="background:var(--worse);border-radius:50%"></span>inflamed</span>
@@ -589,8 +592,8 @@ function prevPain(date) {
 }
 // What each 10 points on the pain scale means
 const PAIN_MARKERS = [
-  [0, 'No pain'],
-  [10, 'Walk outside below 10,000 steps without pain'],
+  [0, 'Walk 10,000 steps without pain'],
+  [10, 'Walk 5,000 steps without pain'],
   [20, 'Walk around the flat with minimal pain'],
   [30, 'Dull achy pain multiple times a day while staying inside. Sitting and sleeping hurt'],
   [40, 'Sharp pain with every step. Sharp and dull achy pain all throughout the day'],
@@ -827,6 +830,9 @@ $('maxRemove').onclick = () => {
 // so later changes to an exercise's settings never rewrite past days.
 // unit 'sec' means reps holds seconds per set. The recovery tag is read from the
 // exercise itself, so tagging one also re-shades the days already logged.
+// "+ Set" logs one set at a time: the log then carries target (the planned sets) and
+// stays in progress until sets reaches it, when target is dropped and it counts as done.
+const exDone = l => !!l && !(l.target && l.sets < l.target);
 // ---------- Medicine ----------
 const medsOn = d => db.meds.filter(m => m.start <= d && (!m.end || m.end >= d)).sort((a, b) => a.start.localeCompare(b.start));
 function renderMeds() {
@@ -892,15 +898,16 @@ const iceText = ice => ice && (ice.L || ice.R) ? [ice.L ? `L×${ice.L}` : '', ic
 function renderExercises() {
   const log = entry(current).ex || {};
   const shown = db.exercises.filter(x => !x.archived || log[x.id]);
-  const done = shown.filter(x => log[x.id]).length;
+  const done = shown.filter(x => exDone(log[x.id])).length;
   $('exCount').textContent = shown.length ? `${done}/${shown.length} done` : '';
   $('exList').innerHTML = shown.length ? shown.map(x => {
     const l = log[x.id];
-    const dose = l || x;
-    return `<div class="ex${l ? ' done' : ''}">
+    const dose = l || x, partial = l && !exDone(l);
+    return `<div class="ex${partial ? ' partial' : l ? ' done' : ''}">
       <div class="ex-row">
-        <button class="check" data-ex-toggle="${x.id}" aria-label="Done">✓</button>
-        <div class="t"><span>${esc(l ? l.name : x.name)}</span><small>${dose.sets} sets × ${dose.reps} ${dose.unit === 'sec' ? 'sec' : 'reps'}${x.recovery ? ' · recovery' : ''}${l && l.ease ? ` · easiness ${l.ease}/5` : ''}</small></div>
+        <button class="check" data-ex-toggle="${x.id}" aria-label="${partial ? 'Finish all sets' : 'Done'}">✓</button>
+        <div class="t"><span>${esc(l ? l.name : x.name)}</span><small>${partial ? `<b style="color:var(--goal)">${l.sets} of ${l.target} sets done</b> · ${l.reps} ${l.unit === 'sec' ? 'sec' : 'reps'}` : `${dose.sets} sets × ${dose.reps} ${dose.unit === 'sec' ? 'sec' : 'reps'}`}${x.recovery ? ' · recovery' : ''}${l && l.ease ? ` · easiness ${l.ease}/5` : ''}</small></div>
+        ${!l || partial ? `<button class="set-btn" data-ex-set="${x.id}" aria-label="Log one set">+ Set <b>${l ? l.sets : 0}/${l ? l.target : x.sets}</b></button>` : ''}
         <button class="icon-btn" data-ex-settings="${x.id}" aria-label="Settings">⚙︎</button>
       </div>
       ${l ? `<div class="ex-detail">
@@ -926,12 +933,23 @@ $('exList').addEventListener('click', e => {
   const d = b.dataset;
   if (d.exToggle) updateExLog(log => {
     const x = db.exercises.find(x => x.id === d.exToggle);
-    if (log[d.exToggle]) delete log[d.exToggle];
+    const l = log[d.exToggle];
+    if (l && !exDone(l)) { log[d.exToggle] = Object.assign({}, l, { sets: l.target }); delete log[d.exToggle].target; }
+    else if (l) delete log[d.exToggle];
     else log[d.exToggle] = { name: x.name, sets: x.sets, reps: x.reps, unit: x.unit };
+  });
+  else if (d.exSet) updateExLog(log => {
+    const x = db.exercises.find(x => x.id === d.exSet);
+    const l = log[d.exSet] = Object.assign({ name: x.name, sets: 0, reps: x.reps, unit: x.unit, target: x.sets }, log[d.exSet]);
+    l.sets++;
+    if (l.sets >= l.target) delete l.target;
   });
   else if (d.exAdj) updateExLog(log => {
     const l = log[d.exAdj] = Object.assign({}, log[d.exAdj]);
-    l[d.f] = clampInt(l[d.f] + Number(d.d), 1, 999);
+    // while sets are still being logged one at a time, going below 1 removes the log
+    l[d.f] = clampInt(l[d.f] + Number(d.d), l.target && d.f === 'sets' ? 0 : 1, 999);
+    if (l.target && l.sets >= l.target) delete l.target;
+    if (!l.sets) delete log[d.exAdj];
   });
   else if (d.exEase) updateExLog(log => {
     const l = log[d.exEase] = Object.assign({}, log[d.exEase]);
@@ -1254,11 +1272,23 @@ function painChart(pain, goals) {
     return `<line x1="${x}" x2="${x}" y1="${PT - 4}" y2="${H - PB}" stroke="var(--goal)" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>
       <text x="${x}" y="${PT - 6}" text-anchor="middle" style="fill:var(--goal);font-size:13px">★<title>${esc(g.text)}</title></text>`;
   }).join('');
+  tipData.painChart = {
+    x: pain.map((_, i) => xScale(i, n)), vw: W + OVR,
+    html: pain.map(p => {
+      const e = db.entries[p.d] || {}, ice = iceText(e.ice);
+      return `<b>${fmtLong(p.d)}</b>` + tipRow('Pain', p.y != null ? `${p.y}/50` : '–', 'var(--accent)')
+        + (e.inflamed ? tipRow('Inflamed', 'yes', 'var(--worse)') : '')
+        + (ice ? tipRow('Iced', ice) : '')
+        + medsOn(p.d).map(m => tipRow(esc(m.name), `day ${daysBetween(m.start, p.d) + 1}`, 'var(--s7)')).join('')
+        + goals.filter(g => g.achieved === p.d).map(g => `<div class="r"><span class="star">★</span>${esc(g.text)}</div>`).join('');
+    }),
+  };
+  const crosshair = `<line class="xh" y1="${PT}" y2="${H - PB}" stroke="var(--text)" stroke-width="1" opacity=".35" style="display:none"/>`;
   return `<svg class="chart" viewBox="0 0 ${W + OVR} ${H}" role="img" aria-label="Knee pain per day, 0 to 50">
-    ${medMarks}${grid}${stars}${iceMarks}
+    ${medMarks}${grid}${stars}${iceMarks}${crosshair}
     ${area ? `<path d="${area}" fill="var(--accent)" opacity=".08"/>` : ''}
     <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-    ${dots}${xLabels(pain.map(p => p.d), H)}
+    ${dots}${hitCols(n, 0, H - PB)}${xLabels(pain.map(p => p.d), H)}
   </svg>`;
 }
 
@@ -1523,6 +1553,7 @@ function greenChart(days, plan) {
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Green days in a row, per day">${grid}${target}${bars}${rises}${exMarks}${hitCols(n, 0, H - PB)}${xLabels(days, H)}</svg>`;
 }
 
+bindTips('painChart');
 bindTips('greenChart');
 bindTips('stepsChart');
 bindTips('allChart');
