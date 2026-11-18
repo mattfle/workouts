@@ -122,6 +122,11 @@
   .check svg { width: 18px; height: 18px; opacity: 0; }
   .check[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
   .check[aria-pressed="true"] svg { opacity: 1; stroke: var(--on-accent); }
+  .check.partial { border-color: var(--accent); }
+  .set-btn { flex: none; padding: 6px 10px; border-radius: 10px; background: var(--field); font-size: 14px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+  .set-btn b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .sets-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+  .step:disabled { opacity: .4; }
 
   /* Buttons */
   .btn {
@@ -382,9 +387,21 @@
   const kindsOf = ex => ex.only ? [ex.only] : ['iso', 'dyn'];
   const dayEntry = sec => sec.history.find(h => h.date === ui.day);
 
+  // "+ Set" logs one set at a time. The count is kept in sec.progress ({ date, sets }),
+  // outside the history, so it only becomes a session (and counts) once every set is done.
+  const setsSoFar = sec => sec.progress && sec.progress.date === ui.day ? sec.progress.sets : 0;
+  function addSet(ex, kind, d) {
+    const sec = ex[kind];
+    if (dayEntry(sec)) return;
+    const n = Math.max(0, setsSoFar(sec) + d);
+    delete sec.progress;
+    if (n >= sec.sets) toggleDone(ex, kind);
+    else if (n > 0) sec.progress = { date: ui.day, sets: n };
+  }
   function toggleDone(ex, kind) {
     const sec = ex[kind], amt = KINDS[kind].amount, t = ui.day;
     const i = sec.history.findIndex(h => h.date === t);
+    delete sec.progress;
     if (i >= 0) {
       sec.history.splice(i, 1);
     } else {
@@ -536,7 +553,8 @@
             <span class="tag">${KINDS[kind].tag}</span>
             <span class="grow cfg">${cfgText(ex, kind)}</span>
             <span class="count">×${timesOn(ex, kind)}</span>
-            <button class="check" data-act="tick" data-id="${ex.id}" data-kind="${kind}"
+            ${dayEntry(ex[kind]) ? '' : `<button class="set-btn" data-act="set" data-d="1" data-id="${ex.id}" data-kind="${kind}" aria-label="Log one ${KINDS[kind].label} set">+ Set <b>${setsSoFar(ex[kind])}/${fmtNum(ex[kind].sets)}</b></button>`}
+            <button class="check${setsSoFar(ex[kind]) ? ' partial' : ''}" data-act="tick" data-id="${ex.id}" data-kind="${kind}"
               aria-pressed="${!!dayEntry(ex[kind])}" aria-label="${KINDS[kind].label} done ${dayName(day)}">${CHECK_SVG}</button>
           </div>`).join('')}
       </div>`).join('');
@@ -697,6 +715,14 @@
         <button class="done-btn" data-act="tick" data-id="${ex.id}" data-kind="${kind}" aria-pressed="${done}">
           ${CHECK_SVG}<span>${done ? 'Done' : 'Mark done'}${ui.day === todayStr() ? ' today' : ''}</span>
         </button>
+        ${done ? '' : `<div class="sets-row">
+          <div>Sets done<div class="small muted">tap + after each set</div></div>
+          <div class="stepper">
+            <button class="step" data-act="set" data-d="-1" data-id="${ex.id}" data-kind="${kind}" aria-label="One set less" ${setsSoFar(sec) ? '' : 'disabled'}>−</button>
+            <span class="times-num">${setsSoFar(sec)}<span class="muted" style="font-size:20px">/${fmtNum(sec.sets)}</span></span>
+            <button class="step" data-act="set" data-d="1" data-id="${ex.id}" data-kind="${kind}" aria-label="One more set">+</button>
+          </div>
+        </div>`}
         <div class="times">
           <div>
             <div>Times done in a row</div>
@@ -1032,6 +1058,7 @@
 
     switch (act) {
       case 'tick': toggleDone(ex, b.dataset.kind); break;
+      case 'set': addSet(ex, b.dataset.kind, +b.dataset.d); break;
       case 'tick-guitar': toggleGuitar(); break;
       case 'day': { const d = shiftDay(ui.day, +b.dataset.d); if (d <= todayStr()) ui.day = d; return render(); }
       case 'cal': return openCal();
