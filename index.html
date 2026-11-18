@@ -109,6 +109,31 @@
   .ex-head { display: flex; align-items: center; justify-content: space-between; text-decoration: none; color: inherit; margin-bottom: 4px; }
   .ex-name { font-size: 19px; font-weight: 600; }
   .chev { color: var(--muted); font-size: 22px; line-height: 1; }
+  /* Drag to reorder, groups */
+  .ex-top { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+  .ex-top .ex-head { flex: 1; margin-bottom: 0; }
+  .drag { flex: none; display: grid; place-items: center; width: 30px; height: 30px; margin-left: -8px; color: var(--muted);
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: grab; }
+  .drag svg { width: 18px; height: 18px; }
+  .lifted { box-shadow: 0 10px 30px rgb(0 0 0 / 0.22); }
+  .lifted.group { background: var(--bg); border-radius: 14px; }
+  .dragging, .dragging * { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+  .placeholder { border: 2px dashed var(--line); border-radius: 14px; margin-bottom: 12px; box-sizing: border-box; }
+  .group-head { display: flex; align-items: center; gap: 2px; margin: 22px 0 6px 4px; }
+  .group-head .drag { margin-left: -6px; }
+  .g-name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; text-align: left; padding: 6px 0; }
+  .g-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-2); }
+  .g-sum { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .g-sum.all { color: var(--accent); font-weight: 600; }
+  .g-chev { color: var(--muted); font-size: 18px; line-height: 1; width: 10px; display: inline-block; transition: transform .2s; align-self: center; }
+  .g-name[aria-expanded="true"] .g-chev { transform: rotate(90deg); }
+  .g-edit { color: var(--muted); font-size: 16px; padding: 4px 6px; }
+  .group-head.drop-into { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 10px; }
+  .g-del { color: var(--muted); font-size: 22px; line-height: 1; padding: 4px 10px; }
+  .zone-empty { border: 2px dashed var(--line); border-radius: 14px; padding: 14px; margin: 0 0 12px; text-align: center; color: var(--muted); font-size: 14px; }
+  .zone-empty.top { display: none; }
+  .dragging .zone-empty.top { display: block; }
+  .zone:has(.ex-card, .placeholder) .zone-empty { display: none; }
   .line { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
   .line:first-of-type { border-top: 0; }
   .tag { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: var(--accent); width: 34px; flex: none; }
@@ -201,6 +226,13 @@
 
   .vol-range { margin-bottom: 10px; }
   .vol-range button { padding: 6px 0; font-size: 13px; }
+  .log-toggle { display: flex; align-items: center; width: 100%; text-align: left; font-weight: 500; color: var(--accent); }
+  .log-toggle .chev { transition: transform .2s; }
+  .log-toggle[aria-expanded="true"] { margin-bottom: 8px; }
+  .log-toggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
+  .vol-filter { display: block; width: 100%; margin-bottom: 10px; padding: 9px 34px 9px 12px; border: 0; border-radius: 10px; background: var(--card); font-size: 15px; font-weight: 500;
+    -webkit-appearance: none; appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(-45deg, transparent 50%, var(--muted) 50%);
+    background-position: right 18px center, right 13px center; background-size: 5px 5px; background-repeat: no-repeat; }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--text-2); margin-top: 8px; }
   .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
   .tip .sw { margin-right: 4px; }
@@ -292,7 +324,8 @@
   // Rep-equivalents for the reps chart: one rep ≈ 3 s under tension at a normal tempo,
   // so an isometric hold counts as secs / 3 reps. Guitar uses its own minutes-per-rep setting.
   const SECS_PER_REP = 3;
-  const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  const DRAG_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 8h14M5 12h14M5 16h14"/></svg>';
+  const CHECK_SVG ='<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
   // ---------- helpers ----------
   const pad = n => String(n).padStart(2, '0');
@@ -367,6 +400,11 @@
     }
     // Guitar is logged in minutes and scored at a fixed 50 points per 30 min.
     if (!d.guitar) d.guitar = { minutes: 30, history: [] };
+    // Exercises can be dragged into any order and into groups (ex.group = a group id).
+    // Each keeps its own chart colour (ex.color) so reordering doesn't swap colours.
+    if (!d.groups) d.groups = [];
+    d.exercises.forEach((ex, i) => { if (ex.color == null) ex.color = i; });
+    for (const ex of d.exercises) if (ex.group && !d.groups.some(g => g.id === ex.group)) delete ex.group;
     return d;
   }
   function save() {
@@ -380,6 +418,12 @@
   // ui.day is the day being logged on the Arms page (today unless picked otherwise)
   const ui = { tab: 'iso', metric: { iso: 'weight', dyn: 'weight' }, range: 30, day: todayStr() };
   try { const r = localStorage.getItem(KEY + '.range'); if (r !== null) ui.range = Number(r); } catch (e) { /* default range */ }
+  // ui.volEx filters the Progress page: '' = everything, an exercise id, or 'guitar'
+  ui.volEx = '';
+  ui.logOpen = false; // the Progress log starts folded away
+  // Groups on the Arms list start folded, except state.openGroup (chosen under Progress → Settings)
+  ui.open = new Set(state.openGroup ? [state.openGroup] : []);
+  try { ui.volEx = localStorage.getItem(KEY + '.volEx') || ''; } catch (e) { /* show everything */ }
 
   // ---------- domain logic ----------
   const findEx = id => state.exercises.find(e => e.id === id);
@@ -543,11 +587,14 @@
            <button class="small" style="color:var(--accent);font-weight:600" data-act="new-cycle">Start new cycle</button></div>`
       : `<p class="small muted" style="margin:10px 0 0">Tap a week to mark it done.</p>`;
 
-    const list = state.exercises.map(ex => `
-      <div class="card">
-        <a class="ex-head" href="#/ex/${ex.id}">
-          <span class="ex-name">${esc(ex.name)}</span><span class="chev">›</span>
-        </a>
+    const card = ex => `
+      <div class="card ex-card" data-id="${ex.id}">
+        <div class="ex-top">
+          <span class="drag" aria-label="Drag to move ${esc(ex.name)}">${DRAG_SVG}</span>
+          <a class="ex-head" href="#/ex/${ex.id}">
+            <span class="ex-name">${esc(ex.name)}</span><span class="chev">›</span>
+          </a>
+        </div>
         ${kindsOf(ex).map(kind => `
           <div class="line">
             <span class="tag">${KINDS[kind].tag}</span>
@@ -557,7 +604,31 @@
             <button class="check${setsSoFar(ex[kind]) ? ' partial' : ''}" data-act="tick" data-id="${ex.id}" data-kind="${kind}"
               aria-pressed="${!!dayEntry(ex[kind])}" aria-label="${KINDS[kind].label} done ${dayName(day)}">${CHECK_SVG}</button>
           </div>`).join('')}
-      </div>`).join('');
+      </div>`;
+    // Exercises not in a group come first, then each group with its exercises (all in state.exercises order).
+    const inGroup = gid => state.exercises.filter(ex => (ex.group || '') === gid);
+    const loose = inGroup('');
+    const list = `<div id="exList">
+      <div class="zone" data-gid="">${loose.map(card).join('')
+        || (state.groups.length ? '<p class="zone-empty top">Drop here to take it out of the group</p>' : '')}</div>
+      ${state.groups.map(g => {
+        const exs = inGroup(g.id), open = ui.open.has(g.id);
+        const lines = exs.flatMap(ex => kindsOf(ex).map(kind => ex[kind])), done = lines.filter(dayEntry).length;
+        const sum = exs.length ? `${exs.length} exercise${exs.length === 1 ? '' : 's'} · ${done}/${lines.length} done` : 'empty';
+        return `
+        <div class="group" data-gid="${g.id}">
+          <div class="group-head">
+            <span class="drag" aria-label="Drag to move the ${esc(g.name)} group">${DRAG_SVG}</span>
+            <button class="g-name" data-act="toggle-group" data-gid="${g.id}" aria-expanded="${open}">
+              <span class="g-chev">›</span><span class="g-title">${esc(g.name)}</span><span class="g-sum${lines.length && done === lines.length ? ' all' : ''}">${sum}</span>
+            </button>
+            <button class="g-edit" data-act="rename-group" data-gid="${g.id}" aria-label="Rename ${esc(g.name)}">✎</button>
+            <button class="g-del" data-act="delete-group" data-gid="${g.id}" aria-label="Delete the ${esc(g.name)} group (keeps its exercises)">×</button>
+          </div>
+          <div class="zone" data-gid="${g.id}"${open ? '' : ' hidden'}>${exs.map(card).join('')}<p class="zone-empty">Drag exercises here</p></div>
+        </div>`;
+      }).join('')}
+    </div>`;
 
     app.innerHTML = `
       ${backLink('#/', 'Workouts')}
@@ -577,7 +648,7 @@
 
       <h2>Exercises</h2>
       ${list}
-      <div class="card">
+      <div class="card"${state.groups.length ? ' style="margin-top:24px"' : ''}>
         <a class="ex-head" href="#/guitar">
           <span class="ex-name">Guitar</span><span class="chev">›</span>
         </a>
@@ -587,7 +658,11 @@
           <button class="check" data-act="tick-guitar" aria-pressed="${!!guitarDay()}" aria-label="Guitar done ${dayName(day)}">${CHECK_SVG}</button>
         </div>
       </div>
-      <button class="btn" data-act="add">+ Add exercise</button>
+      <div class="btn-row">
+        <button class="btn" data-act="add">+ Add exercise</button>
+        <button class="btn" data-act="add-group">+ Add group</button>
+      </div>
+      <p class="small muted" style="margin:0 4px">Hold ${DRAG_SVG.replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px"')} and drag to reorder exercises or move them into a group.</p>
       ${tabbar('today')}
     `;
   }
@@ -609,7 +684,12 @@
     app.innerHTML = `
       ${backLink('#/', 'Workouts')}
       <h1>Progress</h1>
-      <div class="seg vol-range" style="margin-top:12px">
+      <select class="vol-filter" id="volEx" aria-label="Show exercise" style="margin-top:12px">
+        <option value="">All exercises</option>
+        ${state.exercises.map(ex => `<option value="${ex.id}" ${volFilter() === ex.id ? 'selected' : ''}>${esc(ex.name)}</option>`).join('')}
+        <option value="guitar" ${volFilter() === 'guitar' ? 'selected' : ''}>Guitar</option>
+      </select>
+      <div class="seg vol-range">
         ${[[7, 'Week'], [14, '2 wks'], [30, 'Month'], [90, '3 mo'], [0, 'All']].map(([r, l]) =>
           `<button data-act="range" data-r="${r}" aria-pressed="${ui.range === r}">${l}</button>`).join('')}
       </div>
@@ -628,7 +708,10 @@
       </div>
 
       <h2>Log</h2>
-      <div class="card">${log || '<p class="small muted" style="margin:0">Nothing logged yet.</p>'}</div>
+      <button class="card log-toggle" data-act="log-toggle" aria-expanded="${ui.logOpen}">
+        <span class="grow">${ui.logOpen ? 'Hide log' : 'Show log'}</span><span class="chev">›</span>
+      </button>
+      ${ui.logOpen ? `<div class="card">${log || '<p class="small muted" style="margin:0">Nothing logged yet.</p>'}</div>` : ''}
 
       <h2>Settings</h2>
       <div class="card">
@@ -636,6 +719,13 @@
           <label for="f-body">Body weight (kg)<div class="small muted">For assisted exercises</div></label>
           <input id="f-body" inputmode="decimal" value="${state.bodyKg ?? ''}" placeholder="kg">
         </div>
+        ${state.groups.length ? `<div class="field">
+          <label for="f-opengroup">Group open by default<div class="small muted">The others start folded on Today</div></label>
+          <select id="f-opengroup" class="vol-filter" style="width:150px;margin:0;background-color:var(--field)">
+            <option value="">None</option>
+            ${state.groups.map(g => `<option value="${g.id}" ${state.openGroup === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
+          </select>
+        </div>` : ''}
       </div>
 
       <h2>Backup</h2>
@@ -900,7 +990,7 @@
   }
 
   // Stacked bars of rep-equivalents per day, one colour per exercise (guitar always last, slot 8).
-  const exColor = i => `var(--s${i % 7 + 1})`;
+  const exColor = ex => `var(--s${ex.color % 7 + 1})`;
   function daySegs(date) {
     const segs = [];
     state.exercises.forEach((ex, i) => {
@@ -909,14 +999,21 @@
       const pts = (iso ? scoreOf(ex, 'iso', iso) : 0) + (dyn ? scoreOf(ex, 'dyn', dyn) : 0);
       const w = h => h.weight == null ? '' : `${fmtNum(h.weight)} ${h.unit}${ex.assisted ? ' assist' : ''} `;
       const parts = [iso && `ISO ${w(iso)}${fmtNum(iso.sets)}×${fmtNum(iso.secs)}s`, dyn && `DYN ${w(dyn)}${fmtNum(dyn.sets)}×${fmtNum(dyn.reps)}`].filter(Boolean);
-      segs.push({ name: ex.name, color: exColor(i), pts, detail: parts.join(' + ') });
+      segs.push({ id: ex.id, name: ex.name, color: exColor(ex), pts, detail: parts.join(' + ') });
     });
     const g = state.guitar.history.find(h => h.date === date);
-    if (g && g.minutes) segs.push({ name: 'Guitar', color: 'var(--s8)', pts: guitarPts(g.minutes), detail: `${fmtNum(g.minutes)} min` });
-    return segs;
+    if (g && g.minutes) segs.push({ id: 'guitar', name: 'Guitar', color: 'var(--s8)', pts: guitarPts(g.minutes), detail: `${fmtNum(g.minutes)} min` });
+    return volFilter() ? segs.filter(sg => sg.id === volFilter()) : segs;
   }
-  const armDates = () => [...new Set(state.exercises.flatMap(ex => [...ex.iso.history, ...ex.dyn.history])
-    .concat(state.guitar.history).map(h => h.date))];
+  // the chosen filter, or '' if that exercise has since been deleted
+  const volFilter = () => ui.volEx && (ui.volEx === 'guitar' || findEx(ui.volEx)) ? ui.volEx : '';
+  function armDates(all) {
+    const f = all ? '' : volFilter(), ex = f && f !== 'guitar' && findEx(f);
+    const hist = f === 'guitar' ? state.guitar.history
+      : ex ? [...ex.iso.history, ...ex.dyn.history]
+      : state.exercises.flatMap(ex => [...ex.iso.history, ...ex.dyn.history]).concat(state.guitar.history);
+    return [...new Set(hist.map(h => h.date))];
+  }
   function volumeDays() {
     const t = todayStr();
     let start = ui.range ? shiftDay(t, -(ui.range - 1)) : null;
@@ -934,7 +1031,7 @@
 
   function drawVolume(el) {
     const days = volumeDays();
-    const series = [...state.exercises.map((ex, i) => ({ name: ex.name, color: exColor(i) })), { name: 'Guitar', color: 'var(--s8)' }]
+    const series = [...state.exercises.map(ex => ({ name: ex.name, color: exColor(ex) })), { name: 'Guitar', color: 'var(--s8)' }]
       .filter(x => days.some(d => d.segs.some(sg => sg.name === x.name)));
     document.getElementById('volLegend').innerHTML = series.map(x => `<span><span class="sw" style="background:${x.color}"></span>${esc(x.name)}</span>`).join('');
     if (!series.length) {
@@ -998,7 +1095,7 @@
   const cal = document.getElementById('cal');
   let calMonth; // YYYY-MM-01 of the month on show
   function renderCal() {
-    const first = dateOf(calMonth), t = todayStr(), logged = new Set(armDates());
+    const first = dateOf(calMonth), t = todayStr(), logged = new Set(armDates(true));
     document.getElementById('calTitle').textContent = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
     document.getElementById('calNext').disabled = calMonth >= t.slice(0, 8) + '01';
     const lead = (first.getDay() + 6) % 7; // weeks start on Monday
@@ -1068,6 +1165,7 @@
         if (!confirm(`Delete the guitar session from ${fmtDate(b.dataset.date)}?`)) return;
         state.guitar.history = state.guitar.history.filter(h => h.date !== b.dataset.date);
         break;
+      case 'log-toggle': ui.logOpen = !ui.logOpen; return render();
       case 'range':
         ui.range = +b.dataset.r;
         try { localStorage.setItem(KEY + '.range', ui.range); } catch (err) { /* not remembered */ }
@@ -1098,8 +1196,35 @@
           iso: section(null, 'kg', 30, 'iso', '', '', 0, null),
           dyn: section(null, 'kg', 5, 'dyn', '', '', 0, null),
         };
+        nx.color = state.exercises.reduce((a, x) => Math.max(a, x.color + 1), 0);
         state.exercises.push(nx);
         save(); location.hash = '#/ex/' + nx.id; return;
+      }
+      case 'add-group': {
+        const name = (prompt('Group name') || '').trim();
+        if (!name) return;
+        state.groups.push({ id: uid(), name });
+        break;
+      }
+      case 'toggle-group': {
+        const id = b.dataset.gid;
+        ui.open.has(id) ? ui.open.delete(id) : ui.open.add(id);
+        return render();
+      }
+      case 'rename-group': {
+        const g = state.groups.find(g => g.id === b.dataset.gid);
+        const name = (prompt('Group name', g.name) || '').trim();
+        if (!name) return;
+        g.name = name;
+        break;
+      }
+      case 'delete-group': {
+        const g = state.groups.find(g => g.id === b.dataset.gid);
+        if (!confirm(`Delete the group “${g.name}”? Its exercises stay, just outside the group.`)) return;
+        state.groups = state.groups.filter(x => x !== g);
+        if (state.openGroup === g.id) delete state.openGroup;
+        for (const x of state.exercises) if (x.group === g.id) delete x.group;
+        break;
       }
       case 'export': return exportData();
       case 'import': return document.getElementById('importFile').click();
@@ -1108,8 +1233,86 @@
     commit();
   });
 
+  // ---------- drag to reorder (Arms list) ----------
+  // Hold ≡ and drag. An exercise can go anywhere (into, out of, or between groups);
+  // a group's ≡ moves the whole group. On drop, the new order is read back from the page.
+  let drag = null;
+  app.addEventListener('pointerdown', e => {
+    const h = e.target.closest('.drag');
+    if (!h || e.button > 0) return;
+    e.preventDefault();
+    const el = h.closest('.ex-card, .group'), r = el.getBoundingClientRect();
+    const ph = document.createElement('div');
+    ph.className = 'placeholder';
+    ph.style.height = r.height + 'px';
+    el.before(ph);
+    Object.assign(el.style, { position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', zIndex: 50, pointerEvents: 'none', margin: 0 });
+    el.classList.add('lifted');
+    document.body.classList.add('dragging');
+    drag = { el, ph, dy: e.clientY - r.top, x: e.clientX, y: e.clientY, isGroup: el.classList.contains('group') };
+    try { h.setPointerCapture(e.pointerId); } catch (err) { /* moves still reach app */ }
+    drag.timer = setInterval(autoScroll, 16);
+  });
+  function moveDrag() {
+    const { el, ph, x, y } = drag;
+    el.style.top = (y - drag.dy) + 'px';
+    const under = document.elementFromPoint(x, y);
+    if (!under || !app.contains(under)) return;
+    const before = (t, r = t.getBoundingClientRect()) => y < r.top + r.height / 2;
+    if (drag.isGroup) {
+      const g = under.closest('.group');
+      if (g && g !== el) before(g) ? g.before(ph) : g.after(ph);
+      return;
+    }
+    const c = under.closest('.ex-card'), head = under.closest('.group-head'), zone = under.closest('.zone');
+    if (c && c !== el) before(c) ? c.before(ph) : c.after(ph);
+    else if (head) head.nextElementSibling.prepend(ph);
+    else if (zone && !zone.contains(ph)) zone.append(ph);
+    // a folded group shows a dashed outline on its header when the exercise would drop into it
+    for (const gh of app.querySelectorAll('.group-head')) gh.classList.toggle('drop-into', gh.nextElementSibling.hidden && gh.nextElementSibling.contains(ph));
+  }
+  function autoScroll() {
+    const top = 70, bottom = innerHeight - (document.body.classList.contains('has-tabbar') ? 130 : 70);
+    const v = drag.y < top ? -(top - drag.y) / 3 : drag.y > bottom ? (drag.y - bottom) / 3 : 0;
+    if (v) { window.scrollBy(0, Math.max(-25, Math.min(25, v))); moveDrag(); }
+  }
+  function endDrag() {
+    if (!drag) return;
+    clearInterval(drag.timer);
+    const { el, ph } = drag;
+    drag = null;
+    ph.replaceWith(el);
+    el.removeAttribute('style');
+    el.classList.remove('lifted');
+    document.body.classList.remove('dragging');
+    const z = el.classList.contains('ex-card') && el.closest('.zone');
+    if (z && z.hidden) ui.open.add(z.dataset.gid); // open a folded group you just dropped into
+    const moved = [...app.querySelectorAll('.ex-card')].map(c => {
+      const ex = findEx(c.dataset.id), gid = c.closest('.zone').dataset.gid;
+      if (gid) ex.group = gid; else delete ex.group;
+      return ex;
+    });
+    state.exercises = moved.concat(state.exercises.filter(ex => !moved.includes(ex)));
+    const gOrder = [...app.querySelectorAll('.group')].map(g => g.dataset.gid);
+    state.groups.sort((a, b) => gOrder.indexOf(a.id) - gOrder.indexOf(b.id));
+    commit();
+  }
+  app.addEventListener('pointermove', e => { if (drag) { drag.x = e.clientX; drag.y = e.clientY; moveDrag(); } });
+  app.addEventListener('pointerup', endDrag);
+  app.addEventListener('pointercancel', endDrag);
+
   app.addEventListener('change', e => {
     const t = e.target, ex = currentEx();
+    if (t.id === 'f-opengroup') {
+      if (t.value) state.openGroup = t.value; else delete state.openGroup;
+      ui.open = new Set(t.value ? [t.value] : []);
+      return commit();
+    }
+    if (t.id === 'volEx') {
+      ui.volEx = t.value;
+      try { localStorage.setItem(KEY + '.volEx', ui.volEx); } catch (err) { /* not remembered */ }
+      return render();
+    }
     if (t.id === 'f-body') {
       const v = parseNum(t.value);
       state.bodyKg = v != null && v > 0 ? v : null;
